@@ -1,27 +1,65 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
-# from functions import
+from tkinter import messagebox, ttk, filedialog
 
 class Compiler_GUI:
-    def __init__(self,root):
-        
+    def __init__(self, root):
         # aqui creo la ventana principal
         self.root = root
         self.root.title("Compiler Interface")
         self.root.configure(padx=0, pady=0)
 
-        self.root.grid_columnconfigure(0, weight=1) #columnas
-        self.root.grid_rowconfigure(0, weight=1) #filas
-        
+        self.root.grid_columnconfigure(0, weight=1)  # columnas
+        self.root.grid_rowconfigure(0, weight=1)  # filas
+
+        self.current_file = None  # Ruta del archivo actual
         self.create_menu_bar()
-        #Widgets/Areas para aplicacion
-        #Codigo
-        self.code_text_area = tk.Text(root, wrap=tk.WORD, font=("Consolas",12)) #sirve para crear el text area, el tipo de wrap que usara y la fuente y tamano
-        self.code_text_area.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=10, pady=10) #determina la ubicacion del area y donde la deseamos
-        #Pestanas de retroalimentacion sobre lexico, semantica, y esas cosas
+
+        # Widgets/Areas para aplicacion
+        # Frame para el área de texto y los números de línea
+        text_frame = tk.Frame(root)
+        text_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+
+        # Números de línea
+        self.line_numbers = tk.Text(text_frame, width=4, wrap=tk.NONE, font=("Consolas", 12), bg="#f0f0f0", fg="#333", bd=0)
+        self.line_numbers.grid(row=0, column=0, sticky="ns")
+        self.line_numbers.insert(tk.END, "1\n")
+        self.line_numbers.config(state=tk.DISABLED)  # Hacerlo de solo lectura
+
+        # Codigo o area de texto
+        self.code_text_area = tk.Text(text_frame, wrap=tk.NONE, font=("Consolas", 12), bd=0)  # sirve para crear el text area, el tipo de wrap que usara y la fuente y tamano
+        self.code_text_area.grid(row=0, column=1, sticky="nsew")  # determina la ubicacion del area y donde la deseamos
+
+        # Scrollbar vertical
+        scrollbar = tk.Scrollbar(text_frame, command=self.sync_scroll)
+        scrollbar.grid(row=0, column=2, sticky="ns")
+        self.code_text_area.config(yscrollcommand=scrollbar.set)
+        self.line_numbers.config(yscrollcommand=scrollbar.set)
+
+        # Scrollbar horizontal
+        h_scrollbar = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=self.code_text_area.xview)
+        h_scrollbar.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.code_text_area.config(xscrollcommand=h_scrollbar.set)
+
+        # Sincronizar el área de texto con los números de línea
+        self.code_text_area.bind("<KeyRelease>", self.update_line_numbers)
+        self.code_text_area.bind("<MouseWheel>", self.on_scroll)
+        self.code_text_area.bind("<Button-4>", self.on_scroll)  # Para Linux
+        self.code_text_area.bind("<Button-5>", self.on_scroll)  # Para Linux
+
+         # Configuración del grid para el frame de texto
+        text_frame.grid_columnconfigure(1, weight=1)
+        text_frame.grid_rowconfigure(0, weight=1)
+
+        # Mostrar número de línea y columna
+        self.line_column_label = tk.Label(root, text="Línea: 1, Columna: 1", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.line_column_label.grid(row=1, column=0, sticky="we")
+        #self.code_text_area.bind("<KeyRelease>", self.update_line_column)  # Mover esta línea aquí
+
+        # Pestañas de retroalimentacion sobre lexico, semantica, y esas cosas
         self.top_tab = ttk.Notebook(root)
         self.top_tab.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        #Pestanas frame lateral derecho
+
+        # Pestañas frame lateral derecho
         self.lexicon_tab = ttk.Frame(self.top_tab)
         self.syntactic_tab = ttk.Frame(self.top_tab)
         self.semantic_tab = ttk.Frame(self.top_tab)
@@ -33,9 +71,15 @@ class Compiler_GUI:
         self.top_tab.add(self.semantic_tab, text="Semantic")
         self.top_tab.add(self.hash_tab, text="Hash")
         self.top_tab.add(self.inter_code_tab, text="Intermediate Code")
-        #Pestamas frame inferior retroalimentacion de errores por tipo
+
+        # Configuración del grid para la ventana principal
+        self.root.grid_columnconfigure(0, weight=3)
+        self.root.grid_columnconfigure(1, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+
+        # Pestañas frame inferior retroalimentacion de errores por tipo
         self.bottom_tab = ttk.Notebook(root)
-        self.bottom_tab.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0,10))
+        self.bottom_tab.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
         self.error_lexicon_tab = ttk.Frame(self.bottom_tab)
         self.error_syntactic_tab = ttk.Frame(self.bottom_tab)
@@ -46,66 +90,148 @@ class Compiler_GUI:
         self.bottom_tab.add(self.error_syntactic_tab, text="Syntactic Error")
         self.bottom_tab.add(self.error_semantic_tab, text="Semantic Error")
         self.bottom_tab.add(self.results_tab, text="Results")
-        #Configuracion del grid pa que se expandan chido
-        self.root.grid_rowconfigure(0, weight=1) #area de texto
-        self.root.grid_rowconfigure(2, weight=1) #frame inferior
-        self.root.grid_columnconfigure(0, weight=2) #namas una columna
-        #Agrega contenido a las pestanas
-            #self.add_content_to_tabs()
-        def add_content_to_tabs(self):
-            #namas es pa tener una idea
-            tk.Label(self.lexicon_tab, text="Análisis Léxico").grid(row=0, column=0, pady=20)
-            tk.Label(self.syntactic_tab, text="Análisis Sintáctico").grid(row=0, column=0, pady=20)
-            tk.Label(self.semantic_tab, text="Análisis Semántico").grid(row=0, column=0, pady=20)
-            tk.Label(self.hash_tab, text="Tabla de Símbolos").grid(row=0, column=0, pady=20)
-            tk.Label(self.inter_code_tab, text="Código Intermedio").grid(row=0, column=0, pady=20)
 
-            tk.Label(self.error_lexicon_tab, text="Errores Léxicos").grid(row=0, column=0, pady=20)
-            tk.Label(self.error_syntactic_tab, text="Errores Sintácticos").grid(row=0, column=0, pady=20)
-            tk.Label(self.error_semantic_tab, text="Errores Semánticos").grid(row=0, column=0, pady=20)
-            tk.Label(self.results_tab, text="Resultados").grid(row=0, column=0, pady=20)
+        # Configuracion del grid pa que se expandan chido
+        self.root.grid_rowconfigure(0, weight=1)  # area de texto
+        self.root.grid_rowconfigure(2, weight=1)  # frame inferior
+        self.root.grid_columnconfigure(0, weight=2)  # namas una columna
+
 
     def create_menu_bar(self):
         menubar = tk.Menu(self.root)
 
-        #menu archive
+        # menu archive
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="New", command=self.new_file)
         file_menu.add_command(label="Open", command=self.open_file)
         file_menu.add_command(label="Save", command=self.save_file)
+        file_menu.add_command(label="Save As", command=self.save_file_as)
         file_menu.add_separator()
-        #file_menu.add_command(label="Exit", command=self.root.quit)
+        file_menu.add_command(label="Exit", command=self.root.quit)
         menubar.add_cascade(label="File", menu=file_menu)
 
-        #menu edit
-        edit_menu = tk.Menu(menubar,tearoff=0)
+        # Menú Compilar
+        compile_menu = tk.Menu(menubar, tearoff=0)
+        compile_menu.add_command(label="Lexical Analysis", command=self.lexical_analysis)
+        compile_menu.add_command(label="Syntactic Analysis", command=self.syntactic_analysis)
+        compile_menu.add_command(label="Semantic Analysis", command=self.semantic_analysis)
+        compile_menu.add_command(label="Generate Intermediate Code", command=self.generate_intermediate_code)
+        compile_menu.add_command(label="Execute", command=self.execute)
+        menubar.add_cascade(label="Compile", menu=compile_menu)
+
+        # menu edit
+        edit_menu = tk.Menu(menubar, tearoff=0)
         edit_menu.add_command(label="Copy", command=self.copy_text)
         edit_menu.add_command(label="Paste", command=self.paste_text)
-        menubar.add_cascade(label="Edit",menu=edit_menu)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
 
-        #menu ayuda
+        # menu ayuda
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="About of", command=self.show_about)
-        menubar.add_cascade(label="Help",menu=help_menu)
+        menubar.add_cascade(label="Help", menu=help_menu)
 
         self.root.config(menu=menubar)
-            
 
+    def lexical_analysis(self):
+        # Llamar al analizador léxico
+        print("Análisis léxico ejecutado")
 
-    # Aqui se mandaran a llamar la funcionalidades de los botones dentro de la interfaz.
-    # def compile(self):
+    def syntactic_analysis(self):
+        # Llamar al analizador sintáctico
+        print("Análisis sintáctico ejecutado")
+
+    def semantic_analysis(self):
+        # Llamar al analizador semántico
+        print("Análisis semántico ejecutado")
+
+    def generate_intermediate_code(self):
+        # Generar código intermedio
+        print("Código intermedio generado")
+
+    def execute(self):
+        # Ejecutar el código
+        print("Ejecución completada")
+
     def new_file(self):
-        self.text_area.delete(1.0, tk.END)  # Limpiar el área de texto
+        self.code_text_area.delete(1.0, tk.END)  # Limpiar el área de texto
+        self.current_file = None
+        self.root.title("Compiler Interface - New File")
         print("Nuevo archivo creado")
+
     def open_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
+        if file_path:
+            with open(file_path, "r") as file:
+                self.code_text_area.delete(1.0, tk.END)
+                self.code_text_area.insert(tk.END, file.read())
+            self.current_file = file_path
+            self.root.title(f"Compiler Interface - {file_path}")
         print("Abrir archivo")
+
     def save_file(self):
+        if self.current_file:
+            with open(self.current_file, "w") as file:
+                file.write(self.code_text_area.get(1.0, tk.END))
+        else:
+            self.save_file_as()
         print("Guardar archivo")
+
+    def save_file_as(self):
+        file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
+        if file_path:
+            with open(file_path, "w") as file:
+                file.write(self.code_text_area.get(1.0, tk.END))
+            self.current_file = file_path
+            self.root.title(f"Compiler Interface - {file_path}")
+        print("Guardar archivo como")
+
     def copy_text(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.code_text_area.selection_get())
         print("Texto copiado")
+
     def paste_text(self):
+        self.code_text_area.insert(tk.INSERT, self.root.clipboard_get())
         print("Texto pegado")
+
     def show_about(self):
+        messagebox.showinfo("About", "Compiler Interface v1.0\nDesarrollado por Scroto Company")
         print("Acerca de info jeje")
-    
-    
+
+    def update_line_column(self, event=None):
+        line, column = self.code_text_area.index(tk.INSERT).split('.')
+        self.line_column_label.config(text=f"Línea: {line}, Columna: {column}")
+
+    def update_line_numbers(self, event=None):
+        """Actualiza los números de línea."""
+        self.line_numbers.config(state=tk.NORMAL)
+        self.line_numbers.delete(1.0, tk.END)
+        
+        # Obtener el número total de líneas, eliminando el salto de línea adicional de Tkinter
+        lines = int(self.code_text_area.index(tk.END).split('.')[0]) - 1
+
+        # Insertar los números de línea correctamente
+        line_numbers_string = "\n".join(str(i) for i in range(1, lines + 1))
+        self.line_numbers.insert(tk.END, line_numbers_string)
+
+        self.line_numbers.config(state=tk.DISABLED)
+
+    def on_scroll(self, event):
+        """Sincroniza el scroll del área de texto con los números de línea."""
+        if event.delta:  # Windows y MacOS (rueda del mouse)
+            move = -1 if event.delta > 0 else 1
+        elif event.num == 4:  # Linux scroll up
+            move = -1
+        elif event.num == 5:  # Linux scroll down
+            move = 1
+        else:
+            return
+
+        self.code_text_area.yview_scroll(move, "units")
+        self.line_numbers.yview_scroll(move, "units")
+        return "break"  # Evita el desplazamiento duplicado
+
+    def sync_scroll(self, *args):
+        """Sincroniza el desplazamiento con la barra de scroll."""
+        self.code_text_area.yview(*args)
+        self.line_numbers.yview(*args)
