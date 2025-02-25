@@ -156,6 +156,7 @@ class Compiler_GUI:
         self.code_text_area.delete(1.0, tk.END)  # Limpiar el área de texto
         self.current_file = None
         self.root.title("Compiler Interface - New File")
+        self.update_line_numbers()
         print("Nuevo archivo creado")
 
     def open_file(self):
@@ -166,6 +167,7 @@ class Compiler_GUI:
                 self.code_text_area.insert(tk.END, file.read())
             self.current_file = file_path
             self.root.title(f"Compiler Interface - {file_path}")
+        self.update_line_numbers()
         print("Abrir archivo")
 
     def save_file(self):
@@ -218,6 +220,9 @@ class Compiler_GUI:
 
     def on_scroll(self, event):
         """Sincroniza el scroll del área de texto con los números de línea."""
+        if event.state & 0x1:
+            return # Evita el desplazamiento horizontal con Shift + rueda del mouse
+        
         if event.delta:  # Windows y MacOS (rueda del mouse)
             move = -1 if event.delta > 0 else 1
         elif event.num == 4:  # Linux scroll up
@@ -229,9 +234,11 @@ class Compiler_GUI:
 
         self.code_text_area.yview_scroll(move, "units")
         self.line_numbers.yview_scroll(move, "units")
+        self.update_line_numbers()
         return "break"  # Evita el desplazamiento duplicado
 
     def sync_scroll(self, *args):
         """Sincroniza el desplazamiento con la barra de scroll."""
         self.code_text_area.yview(*args)
         self.line_numbers.yview(*args)
+        self.update_line_numbers()
