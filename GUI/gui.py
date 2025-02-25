@@ -14,7 +14,6 @@ class Compiler_GUI:
         self.root.grid_rowconfigure(0, weight=1) #filas
         
         self.create_menu_bar()
-
         #Widgets/Areas para aplicacion
         #Codigo
         self.code_text_area = tk.Text(root, wrap=tk.WORD, font=("Consolas",12)) #sirve para crear el text area, el tipo de wrap que usara y la fuente y tamano
