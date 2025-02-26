@@ -53,7 +53,7 @@ class Compiler_GUI:
         # Mostrar número de línea y columna
         self.line_column_label = tk.Label(root, text="Línea: 1, Columna: 1", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.line_column_label.grid(row=1, column=0, sticky="we")
-        #self.code_text_area.bind("<KeyRelease>", self.update_line_column)  # Mover esta línea aquí
+        self.code_text_area.bind("<KeyRelease>", self.update_line_column)  # Mover esta línea aquí
 
         # Pestañas de retroalimentacion sobre lexico, semantica, y esas cosas
         self.top_tab = ttk.Notebook(root)
@@ -160,6 +160,7 @@ class Compiler_GUI:
         print("Nuevo archivo creado")
 
     def open_file(self):
+        self.update_line_numbers()
         file_path = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
         if file_path:
             with open(file_path, "r") as file:
@@ -201,8 +202,9 @@ class Compiler_GUI:
         print("Acerca de info jeje")
 
     def update_line_column(self, event=None):
+        """Actualiza la posición actual del cursor."""
         line, column = self.code_text_area.index(tk.INSERT).split('.')
-        self.line_column_label.config(text=f"Línea: {line}, Columna: {column}")
+        self.line_column_label.config(text=f"Línea: {line}, Columna: {int(column)+1}")
 
     def update_line_numbers(self, event=None):
         """Actualiza los números de línea."""
@@ -234,7 +236,6 @@ class Compiler_GUI:
 
         self.code_text_area.yview_scroll(move, "units")
         self.line_numbers.yview_scroll(move, "units")
-        self.update_line_numbers()
         return "break"  # Evita el desplazamiento duplicado
 
     def sync_scroll(self, *args):
