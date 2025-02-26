@@ -3,10 +3,26 @@ from tkinter import messagebox, ttk, filedialog
 
 class Compiler_GUI:
     def __init__(self, root):
+        self.BG_COLOR = "#2C2F33"
+        self.TAB_BG = "#23272A" 
+        self.TEXT_BG = "#1E2124" 
+        self.BORDER_COLOR = "#40444B"
+        self.TEXT_COLOR = "#FFFFFF"
+        self.FRAME_BG = "#474E68"
+        self.LINE_NUM_BG = "#343A50"
+        self.LINE_NUM_FG = "#E0E0E0"
+        self.STATUS_BAR_BG = "#6B728E"
+        self.BUTTON_BG = "5865F2"
+        self.BUTTON_FG = "FFFFFF"
+        self.ENTRY_BG = "1E1E1E"
+        
         # aqui creo la ventana principal
         self.root = root
         self.root.title("Compiler Interface")
-        self.root.configure(padx=0, pady=0)
+        self.root.configure(padx=0, pady=0, bg=self.BG_COLOR)
+
+        #configuracion de estilo del ttk(notebooks y tabs)
+        self.configure_styles()
 
         self.root.grid_columnconfigure(0, weight=1)  # columnas
         self.root.grid_rowconfigure(0, weight=1)  # filas
@@ -16,27 +32,27 @@ class Compiler_GUI:
 
         # Widgets/Areas para aplicacion
         # Frame para el área de texto y los números de línea
-        text_frame = tk.Frame(root)
+        text_frame = tk.Frame(root, bg=self.FRAME_BG)
         text_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
         # Números de línea
-        self.line_numbers = tk.Text(text_frame, width=4, wrap=tk.NONE, font=("Consolas", 12), bg="#f0f0f0", fg="#333", bd=0)
+        self.line_numbers = tk.Text(text_frame, width=4, wrap=tk.NONE, font=("Consolas", 12), bg=self.LINE_NUM_BG, fg=self.LINE_NUM_FG, bd=0)
         self.line_numbers.grid(row=0, column=0, sticky="ns")
         self.line_numbers.insert(tk.END, "1\n")
         self.line_numbers.config(state=tk.DISABLED)  # Hacerlo de solo lectura
 
         # Codigo o area de texto
-        self.code_text_area = tk.Text(text_frame, wrap=tk.NONE, font=("Consolas", 12), bd=0)  # sirve para crear el text area, el tipo de wrap que usara y la fuente y tamano
+        self.code_text_area = tk.Text(text_frame, wrap=tk.NONE, font=("Consolas", 12), bd=0, bg=self.LINE_NUM_BG, fg=self.LINE_NUM_FG, insertbackground=self.TEXT_COLOR)  # sirve para crear el text area, el tipo de wrap que usara y la fuente y tamano
         self.code_text_area.grid(row=0, column=1, sticky="nsew")  # determina la ubicacion del area y donde la deseamos
 
         # Scrollbar vertical
-        scrollbar = tk.Scrollbar(text_frame, command=self.sync_scroll)
+        scrollbar = tk.Scrollbar(text_frame, command=self.sync_scroll, bg=self.BORDER_COLOR)
         scrollbar.grid(row=0, column=2, sticky="ns")
         self.code_text_area.config(yscrollcommand=scrollbar.set)
         self.line_numbers.config(yscrollcommand=scrollbar.set)
 
         # Scrollbar horizontal
-        h_scrollbar = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=self.code_text_area.xview)
+        h_scrollbar = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=self.code_text_area.xview, bg=self.BORDER_COLOR)
         h_scrollbar.grid(row=1, column=0, columnspan=2, sticky="ew")
         self.code_text_area.config(xscrollcommand=h_scrollbar.set)
 
@@ -51,7 +67,7 @@ class Compiler_GUI:
         text_frame.grid_rowconfigure(0, weight=1)
 
         # Mostrar número de línea y columna
-        self.line_column_label = tk.Label(root, text="Línea: 1, Columna: 1", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.line_column_label = tk.Label(root, text="Línea: 1, Columna: 1", bd=1, relief=tk.SUNKEN, anchor=tk.W, bg=self.STATUS_BAR_BG, fg=self.TEXT_COLOR)
         self.line_column_label.grid(row=1, column=0, sticky="we")
         self.code_text_area.bind("<KeyRelease>", self.update_line_column)  # Mover esta línea aquí
 
@@ -79,7 +95,7 @@ class Compiler_GUI:
 
         # Pestañas frame inferior retroalimentacion de errores por tipo
         self.bottom_tab = ttk.Notebook(root)
-        self.bottom_tab.grid(row=2, column=0, sticky="nsew", padx=10, pady=(0, 10))
+        self.bottom_tab.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=10, pady=(0, 10))
 
         self.error_lexicon_tab = ttk.Frame(self.bottom_tab)
         self.error_syntactic_tab = ttk.Frame(self.bottom_tab)
@@ -95,13 +111,30 @@ class Compiler_GUI:
         self.root.grid_rowconfigure(0, weight=1)  # area de texto
         self.root.grid_rowconfigure(2, weight=1)  # frame inferior
         self.root.grid_columnconfigure(0, weight=2)  # namas una columna
+        
+
+    def configure_styles(self):
+        style = ttk.Style(self.root)
+
+        style.theme_use("clam")
+        #fondo de los notebooks
+        style.configure("TNotebook",background=self.FRAME_BG, borderwidth=0)    
+        style.configure("TNotebook.Tab", background=self.LINE_NUM_BG, foreground=self.TEXT_COLOR, padding=(10,5), font=("Arial", 12, "bold"))
+        style.map("TNotebook.Tab", background=[("selected","#101018")])
+        #fondo de los frames de las notebooks
+        style.configure("TFrame", background=self.FRAME_BG)
+        #fondo de labels y lo demas
+        style.configure("TLabel", background=self.FRAME_BG, foreground=self.TEXT_COLOR)
+        style.configure("TButton", background=self.BUTTON_BG, foreground=self.BUTTON_FG, font=("Arial", 10, "bold"), padding=(5,5))
+        style.map("TButton", background=[("active","#4850D4")])
+        style.configure("TEntry", background=self.ENTRY_BG, foreground=self.TEXT_COLOR, insertcolor=self.TEXT_COLOR, padding=(5,5)) 
 
 
     def create_menu_bar(self):
-        menubar = tk.Menu(self.root)
+        menubar = tk.Menu(self.root, bg=self.BORDER_COLOR, fg=self.TEXT_COLOR)
 
         # menu archive
-        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu = tk.Menu(menubar, tearoff=0, bg=self.TAB_BG, fg=self.TEXT_COLOR)
         file_menu.add_command(label="New", command=self.new_file)
         file_menu.add_command(label="Open", command=self.open_file)
         file_menu.add_command(label="Save", command=self.save_file)
