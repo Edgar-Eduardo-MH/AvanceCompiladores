@@ -54,6 +54,9 @@ class Compiler_GUI:
         self.line_column_label = tk.Label(root, text="Línea: 1, Columna: 1", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.line_column_label.grid(row=1, column=0, sticky="we")
         self.code_text_area.bind("<KeyRelease>", self.update_line_column)  # Mover esta línea aquí
+        self.code_text_area.bind("<KeyRelease>", self.update_line_numbers)
+        self.code_text_area.bind("<Return>", self.update_line_numbers)
+        self.code_text_area.bind("<BackSpace>", self.update_line_numbers)
 
         # Pestañas de retroalimentacion sobre lexico, semantica, y esas cosas
         self.top_tab = ttk.Notebook(root)
@@ -209,16 +212,20 @@ class Compiler_GUI:
     def update_line_numbers(self, event=None):
         """Actualiza los números de línea."""
         self.line_numbers.config(state=tk.NORMAL)
+
+        scroll_position = self.code_text_area.yview()
+
         self.line_numbers.delete(1.0, tk.END)
         
         # Obtener el número total de líneas, eliminando el salto de línea adicional de Tkinter
-        lines = int(self.code_text_area.index(tk.END).split('.')[0]) - 1
+        lines = int(self.code_text_area.index('end-1c').split('.')[0])
 
         # Insertar los números de línea correctamente
         line_numbers_string = "\n".join(str(i) for i in range(1, lines + 1))
         self.line_numbers.insert(tk.END, line_numbers_string)
 
         self.line_numbers.config(state=tk.DISABLED)
+        self.line_numbers.yview_moveto(scroll_position[0])
 
     def on_scroll(self, event):
         """Sincroniza el scroll del área de texto con los números de línea."""
