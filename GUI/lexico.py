@@ -1,7 +1,7 @@
 def lexical_analysis(code):
-    # Implementa el análisis léxico aquí
+    # análisis léxico aquí
     tokens = []
-    # Lógica para tokenizar el código
+    
     return tokens
 
 if __name__ == "__main__":
