@@ -92,6 +92,52 @@ class Compiler_GUI:
         self.root.config(menu=menubar)
             
 
+<<<<<<< Updated upstream
+=======
+        # Crear una segunda barra (frame) para los botones con íconos
+        icon_bar = tk.Frame(self.root, bg=self.BORDER_COLOR)
+        icon_bar.grid(row=1, column=0, sticky="ew", padx=10)
+        # Cargar imágenes para los botones
+        self.new_icon = tk.PhotoImage(file="icons/new.png").subsample(15,15)
+        self.open_icon = tk.PhotoImage(file="icons/open.png").subsample(17,17)
+        self.save_icon = tk.PhotoImage(file="icons/save.png").subsample(23,23)
+        self.saveas_icon = tk.PhotoImage(file="icons/save_as.png").subsample(20,20)
+        self.exit_icon = tk.PhotoImage(file="icons/exit.png").subsample(20,20)
+
+        # Crear botones con imágenes para la barra de íconos
+        btn_new = tk.Button(icon_bar, image=self.new_icon, command=self.new_file, borderwidth=1, width=25, height=25)
+        btn_open = tk.Button(icon_bar, image=self.open_icon, command=self.open_file, borderwidth=1, width=25, height=25)
+        btn_save = tk.Button(icon_bar, image=self.save_icon, command=self.save_file, borderwidth=1, width=25, height=25)
+        btn_saveas = tk.Button(icon_bar, image=self.saveas_icon, command=self.save_file_as, borderwidth=1, width=25, height=25)
+        btn_exit = tk.Button(icon_bar, image=self.exit_icon, command=self.root.quit, borderwidth=1, width=25, height=25)
+
+        # Posicionar botones en la barra de íconos
+        btn_new.grid(row=0, column=0, padx=2, pady=2)
+        btn_open.grid(row=0, column=1, padx=2, pady=2)
+        btn_save.grid(row=0, column=2, padx=2, pady=2)
+        btn_saveas.grid(row=0, column=3, padx=2, pady=2)
+        btn_exit.grid(row=0, column=4, padx=2, pady=2)
+
+    def lexical_analysis(self):
+        # Llamar al analizador léxico
+        print("Análisis léxico ejecutado")
+
+    def syntactic_analysis(self):
+        # Llamar al analizador sintáctico
+        print("Análisis sintáctico ejecutado")
+
+    def semantic_analysis(self):
+        # Llamar al analizador semántico
+        print("Análisis semántico ejecutado")
+
+    def generate_intermediate_code(self):
+        # Generar código intermedio
+        print("Código intermedio generado")
+
+    def execute(self):
+        # Ejecutar el código
+        print("Ejecución completada")
+>>>>>>> Stashed changes
 
     # Aqui se mandaran a llamar la funcionalidades de los botones dentro de la interfaz.
     # def compile(self):
