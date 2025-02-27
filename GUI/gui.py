@@ -68,7 +68,6 @@ class Compiler_GUI:
         self.code_text_area.config(xscrollcommand=h_scrollbar.set)
 
         # Sincronizar el área de texto con los números de línea
-        self.code_text_area.bind("<KeyRelease>", self.update_line_numbers)
         self.code_text_area.bind("<MouseWheel>", self.on_scroll)
         self.code_text_area.bind("<Button-4>", self.on_scroll)  # Para Linux
         self.code_text_area.bind("<Button-5>", self.on_scroll)  # Para Linux
@@ -80,10 +79,11 @@ class Compiler_GUI:
         # Mostrar número de línea y columna
         self.line_column_label = tk.Label(text_frame, text="Línea: 1, Columna: 1", bd=1, relief=tk.SUNKEN, anchor=tk.W, bg=self.STATUS_BAR_BG, fg=self.TEXT_COLOR)
         self.line_column_label.grid(row=2, column=1, sticky="we", columnspan=1)
-        self.code_text_area.bind("<KeyRelease>", self.update_line_column)  # Mover esta línea aquí
-        self.code_text_area.bind("<KeyRelease>", self.update_line_numbers)
+
+        self.code_text_area.bind("<KeyRelease>", self.handle_key_release)
         self.code_text_area.bind("<Return>", self.update_line_numbers)
         self.code_text_area.bind("<BackSpace>", self.update_line_numbers)
+        self.code_text_area.bind("<ButtonRelease-1>", self.update_line_column)
 
         # Pestañas de retroalimentacion sobre lexico, semantica, y esas cosas
         self.top_tab = ttk.Notebook(root)
@@ -254,6 +254,11 @@ class Compiler_GUI:
     def show_about(self):
         messagebox.showinfo("About", "Compiler Interface v1.0\nDesarrollado por Scroto Company")
         print("Acerca de info jeje")
+
+    def handle_key_release(self, event=None):
+        """Maneja la actualización de números de línea y posición del cursor."""
+        self.update_line_numbers()
+        self.update_line_column()
 
     def update_line_column(self, event=None):
         """Actualiza la posición actual del cursor."""
