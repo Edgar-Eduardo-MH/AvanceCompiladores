@@ -27,6 +27,13 @@ class Compiler_GUI:
         self.root = root
         self.root.title("Compiler Interface")
         self.root.configure(padx=0, pady=0, bg=self.BG_COLOR)
+        
+        self.fullscreen = True  # Estado inicial
+        self.root.attributes('-fullscreen', True)
+
+        # Asignar eventos de teclado
+        self.root.bind("<F11>", self.toggle_fullscreen)  # Alternar con F11
+        self.root.bind("<Escape>", self.exit_fullscreen)  # Salir con Escape
 
         #configuracion de estilo del ttk(notebooks y tabs)
         self.configure_styles()
@@ -161,7 +168,8 @@ class Compiler_GUI:
         file_menu.add_command(label="Save", command=self.save_file)
         file_menu.add_command(label="Save As", command=self.save_file_as)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.root.quit)
+        #file_menu.add_command(label="Exit", command=self.root.quit)
+        file_menu.add_command(label="Exit", command=self.close_file)
         menubar.add_cascade(label="File", menu=file_menu)
 
         # Menú Compilar
@@ -185,6 +193,31 @@ class Compiler_GUI:
         menubar.add_cascade(label="Help", menu=help_menu)
 
         self.root.config(menu=menubar)
+
+        # Crear una segunda barra (frame) para los botones con íconos
+        icon_bar = tk.Frame(self.root, bg=self.BORDER_COLOR)
+        icon_bar.grid(row=1, column=0, sticky="ew", padx=10)
+        # Cargar imágenes para los botones
+        self.new_icon = tk.PhotoImage(file="icons/new.png").subsample(15,15)
+        self.open_icon = tk.PhotoImage(file="icons/open.png").subsample(17,17)
+        self.save_icon = tk.PhotoImage(file="icons/save.png").subsample(23,23)
+        self.saveas_icon = tk.PhotoImage(file="icons/save_as.png").subsample(20,20)
+        self.exit_icon = tk.PhotoImage(file="icons/exit.png").subsample(20,20)
+
+        # Crear botones con imágenes para la barra de íconos
+        btn_new = tk.Button(icon_bar, image=self.new_icon, command=self.new_file, borderwidth=1, width=25, height=25)
+        btn_open = tk.Button(icon_bar, image=self.open_icon, command=self.open_file, borderwidth=1, width=25, height=25)
+        btn_save = tk.Button(icon_bar, image=self.save_icon, command=self.save_file, borderwidth=1, width=25, height=25)
+        btn_saveas = tk.Button(icon_bar, image=self.saveas_icon, command=self.save_file_as, borderwidth=1, width=25, height=25)
+        btn_exit = tk.Button(icon_bar, image=self.exit_icon, command=self.close_file, borderwidth=1, width=25, height=25)
+        #btn_exit = tk.Button(icon_bar, image=self.exit_icon, command=self.root.quit, borderwidth=1, width=25, height=25)
+
+        # Posicionar botones en la barra de íconos
+        btn_new.grid(row=0, column=0, padx=2, pady=2)
+        btn_open.grid(row=0, column=1, padx=2, pady=2)
+        btn_save.grid(row=0, column=2, padx=2, pady=2)
+        btn_saveas.grid(row=0, column=3, padx=2, pady=2)
+        btn_exit.grid(row=0, column=4, padx=2, pady=2)
 
     def lexical_analysis(self):
         # Llamar al analizador léxico
@@ -241,6 +274,14 @@ class Compiler_GUI:
             self.current_file = file_path
             self.root.title(f"Compiler Interface - {file_path}")
         print("Guardar archivo como")
+
+    def close_file(self):
+        """ Cierra el archivo actual sin cerrar la aplicación """
+        self.code_text_area.delete(1.0, tk.END)  # Limpia el área de texto
+        self.current_file = None
+        self.root.title("Compiler Interface - Sin archivo abierto")
+        self.update_line_numbers()
+        print("Archivo cerrado")
 
     def copy_text(self):
         self.root.clipboard_clear()
@@ -306,3 +347,13 @@ class Compiler_GUI:
         self.code_text_area.yview(*args)
         self.line_numbers.yview(*args)
         self.update_line_numbers()
+
+
+    #Configuracion pantalla completa
+    def toggle_fullscreen(self, event=None):
+        self.fullscreen = not self.fullscreen
+        self.root.attributes('-fullscreen', self.fullscreen)
+
+    def exit_fullscreen(self, event=None):
+        self.fullscreen = False
+        self.root.attributes('-fullscreen', False)
