@@ -253,7 +253,7 @@ class Compiler_GUI:
             output.config(state=tk.DISABLED)  # Bloquea la edición
 
         except SyntaxError as e:
-            output = self.create_output_area(self.lexicon_tab)
+            output = self.create_output_area(self.error_lexicon_tab)
             output.insert(tk.END, f"Error léxico: {e}")
             output.config(state=tk.DISABLED)
 
