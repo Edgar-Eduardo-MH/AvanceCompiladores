@@ -1,5 +1,6 @@
 import tkinter as tk, os, sys
 from tkinter import messagebox, ttk, filedialog
+from analyzer import analizador_lexico
 
 class Compiler_GUI:
     def __init__(self, root):
@@ -226,10 +227,35 @@ class Compiler_GUI:
         btn_saveas.grid(row=0, column=3, padx=2, pady=2)
         btn_exit.grid(row=0, column=4, padx=2, pady=2)
 
+    def create_output_area(self, frame):
+        for widget in frame.winfo_children():
+            widget.destroy()
+        output = tk.Text(frame, wrap="word", bg=self.TEXT_BG, fg=self.TEXT_COLOR, font=("Consolas", 12))
+        output.pack(expand=True, fill="both")
+        return output
 
     def lexical_analysis(self):
         # Llamar al analizador léxico
-        print("Análisis léxico ejecutado")
+        text = self.code_text_area.get(1.0, tk.END).strip()  # <-- strip aquí
+        try:
+            tokens = analizador_lexico(text)  # Esto ya devuelve tu lista de tokens
+
+            # Crear o limpiar el área de salida en la pestaña de léxico
+            output = self.create_output_area(self.lexicon_tab)
+
+            if not tokens:
+                output.insert(tk.END, "No se encontraron tokens.")
+            else:
+                output.insert(tk.END, "Resultado del análisis léxico:\n\n")
+                for token in tokens:
+                    output.insert(tk.END, f"{token}\n")  # Mostrar cada token
+
+            output.config(state=tk.DISABLED)  # Bloquea la edición
+
+        except SyntaxError as e:
+            output = self.create_output_area(self.lexicon_tab)
+            output.insert(tk.END, f"Error léxico: {e}")
+            output.config(state=tk.DISABLED)
 
     def syntactic_analysis(self):
         # Llamar al analizador sintáctico
@@ -308,6 +334,7 @@ class Compiler_GUI:
         """Maneja la actualización de números de línea y posición del cursor."""
         self.update_line_numbers()
         self.update_line_column()
+        self.lexical_analysis()
 
     def update_line_column(self, event=None):
         """Actualiza la posición actual del cursor."""
