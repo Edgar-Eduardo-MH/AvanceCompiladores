@@ -1,4 +1,4 @@
-import tkinter as tk
+import tkinter as tk, os, sys
 from tkinter import messagebox, ttk, filedialog
 
 class Compiler_GUI:
@@ -21,7 +21,6 @@ class Compiler_GUI:
         self.DARK_GRAY_SCROLL = "#1E1E1E"
         self.DARKER_GRAY_SCROLL = "#121212"
         self.BORDER_SCROLL = "#1E1E1E"
-    
         
         # aqui creo la ventana principal
         self.root = root
@@ -161,6 +160,14 @@ class Compiler_GUI:
     def create_menu_bar(self):
         menubar = tk.Menu(self.root, bg=self.BORDER_COLOR, fg=self.TEXT_COLOR)
 
+        def resource_path(relative_path):
+            """ Obtiene la ruta correcta dentro del ejecutable o normal en visual """
+            if getattr(sys, 'frozen', False):  # Si el script está compilado con PyInstaller
+                base_path = sys._MEIPASS  # Carpeta temporal donde PyInstaller guarda archivos
+            else:
+                base_path = os.path.abspath(".")  # Carpeta normal en modo desarrollo
+            return os.path.join(base_path, relative_path)
+
         # menu archive
         file_menu = tk.Menu(menubar, tearoff=0, bg=self.TAB_BG, fg=self.TEXT_COLOR)
         file_menu.add_command(label="New", command=self.new_file)
@@ -198,11 +205,11 @@ class Compiler_GUI:
         icon_bar = tk.Frame(self.root, bg=self.BORDER_COLOR)
         icon_bar.grid(row=1, column=0, sticky="ew", padx=10)
         # Cargar imágenes para los botones
-        self.new_icon = tk.PhotoImage(file="icons/new.png").subsample(15,15)
-        self.open_icon = tk.PhotoImage(file="icons/open.png").subsample(17,17)
-        self.save_icon = tk.PhotoImage(file="icons/save.png").subsample(23,23)
-        self.saveas_icon = tk.PhotoImage(file="icons/save_as.png").subsample(20,20)
-        self.exit_icon = tk.PhotoImage(file="icons/exit.png").subsample(20,20)
+        self.new_icon = tk.PhotoImage(file=resource_path("icons/new.png")).subsample(15, 15)
+        self.open_icon = tk.PhotoImage(file=resource_path("icons/open.png")).subsample(17, 17)
+        self.save_icon = tk.PhotoImage(file=resource_path("icons/save.png")).subsample(23, 23)
+        self.saveas_icon = tk.PhotoImage(file=resource_path("icons/save_as.png")).subsample(20, 20)
+        self.exit_icon = tk.PhotoImage(file=resource_path("icons/exit.png")).subsample(20, 20)
 
         # Crear botones con imágenes para la barra de íconos
         btn_new = tk.Button(icon_bar, image=self.new_icon, command=self.new_file, borderwidth=1, width=25, height=25)
@@ -218,6 +225,7 @@ class Compiler_GUI:
         btn_save.grid(row=0, column=2, padx=2, pady=2)
         btn_saveas.grid(row=0, column=3, padx=2, pady=2)
         btn_exit.grid(row=0, column=4, padx=2, pady=2)
+
 
     def lexical_analysis(self):
         # Llamar al analizador léxico
