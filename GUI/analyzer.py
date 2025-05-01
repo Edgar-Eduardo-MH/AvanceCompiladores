@@ -1,55 +1,69 @@
 import re
 
-# Definicion de variables
-COLORES = {
-    'numero': 'Color 1',
-    'identificador': 'Color 2',
-    'comentario': 'Color 3',
-    'reservada': 'Color 4',
-    'operador_aritmetico': 'Color 5',
-    'operador_relacional_logico': 'Color 6',
-    'simbolo': 'Color 7',
-    'asignacion': 'Color 4'
+# Definición de colores para cada tipo de token
+COLORS = {
+    'number': '#FFB86C',
+    'identifier': '#F8F8F2',
+    'comment': '#6272A4',
+    'keyword': '#FF79C6',
+    'arithmetic_operator': '#8BE9FD',
+    'logical_relational_operator': '#BD93F9',
+    'symbol': '#50FA7B',
+    'assignment': '#FF5555'
 }
 
-PALABRAS_RESERVADAS = {
-    'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'float', 'main', 'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return',
+# Palabras reservadas del lenguaje
+KEYWORDS = {
+    'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'float', 'main',
+    'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return'
 }
 
-PATRONES = [
-    ('comentario_multilinea', r'/\*[\s\S]*?\*/'),  # Multilínea estilo C
-    ('comentario_linea', r'#.*'),  # Comentario una línea estilo python
-    ('numero_real', r'[+-]?\d+\.\d+'),  # Número real ya sea positivo o negativo
-    ('numero_entero', r'[+-]?\d+'),  # Número entero
-    ('operador_relacional_logico', r'(\|\||&&|==|!=|<=|>=|<|>)'),  # Relacionales y lógicos
-    ('operador_aritmetico', r'(\+\+|--|\+|-|\*|/|%|\^)'),  # Aritméticos
-    ('asignacion', r'='),  # Asignación
-    ('simbolo', r'[\(\)\{\},;]'),  # Símbolos especiales
-    ('identificador', r'[A-Za-z_][A-Za-z0-9_]*'),  # Identificador válido
-    ('espacio', r'\s+'),  # Espacios que se van a irgnorar
+# Patrones para los distintos tipos de tokens
+PATTERNS = [
+    ('multiline_comment', r'/\*[\s\S]*?\*/'),       # Comentario multilínea estilo C
+    ('singleline_comment', r'#.*'),                 # Comentario de una línea estilo Python
+    ('real_number', r'[+-]?\d+\.\d+'),              # Número real (positivo o negativo)
+    ('integer_number', r'[+-]?\d+'),                # Número entero
+    ('logical_relational_operator', r'(\|\||&&|==|!=|<=|>=|<|>)'),  # Operadores relacionales/lógicos
+    ('arithmetic_operator', r'(\+\+|--|\+|-|\*|/|%|\^)'),            # Operadores aritméticos
+    ('assignment', r'='),                           # Asignación
+    ('symbol', r'[\(\)\{\},;]'),                    # Símbolos especiales
+    ('identifier', r'[A-Za-z_][A-Za-z0-9_]*'),      # Identificador válido
+    ('whitespace', r'\s+'),                         # Espacios en blanco que se ignoran
 ]
 
-# analizador lexico - tokenizador
-def analizador_lexico(codigo_fuente):
+# Analizador léxico que devuelve lista de tokens con tipo, lexema, línea y columna
+def lexical_analyzer(source_code):
     tokens = []
-    posicion = 0
-    while posicion < len(codigo_fuente):
+    line = 1
+    column = 1
+    position = 0
+
+    while position < len(source_code):
         match = None
-        for tipo, patron in PATRONES:
-            regex = re.compile(patron)
-            match = regex.match(codigo_fuente, posicion)
+        for token_type, pattern in PATTERNS:
+            regex = re.compile(pattern)
+            match = regex.match(source_code, position)
             if match:
-                texto = match.group(0)
-                if tipo == 'espacio':
-                    # Ignorar espacios
-                    pass
-                elif tipo == 'identificador' and texto in PALABRAS_RESERVADAS:
-                    tokens.append(('reservada', texto, COLORES['reservada']))
+                text = match.group(0)
+                if token_type == 'whitespace':
+                    newlines = text.count('\n')
+                    if newlines > 0:
+                        line += newlines
+                        column = len(text.rsplit('\n', 1)[-1]) + 1
+                    else:
+                        column += len(text)
                 else:
-                    tokens.append((tipo, texto, COLORES.get(tipo, 'Color Default')))
-                posicion = match.end()
+                    if token_type == 'identifier' and text in KEYWORDS:
+                        real_type = 'keyword'
+                    else:
+                        real_type = token_type
+                    color = COLORS.get(real_type, '#FFFFFF')  # Color por defecto si no está en el diccionario
+                    tokens.append((real_type, text, color, line, column))
+                    column += len(text)
+                position = match.end()
                 break
         if not match:
-            # No se reconoció un token válido
-            raise SyntaxError(f"Token inválido en posición {posicion}: '{codigo_fuente[posicion]}'")
+            raise SyntaxError(f"Invalid token at line {line}, column {column}: '{source_code[position]}'")
     return tokens
+

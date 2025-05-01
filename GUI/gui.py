@@ -1,6 +1,6 @@
 import tkinter as tk, os, sys
 from tkinter import messagebox, ttk, filedialog
-from analyzer import analizador_lexico
+from analyzer import lexical_analyzer
 
 class Compiler_GUI:
     def __init__(self, root):
@@ -235,26 +235,45 @@ class Compiler_GUI:
         return output
 
     def lexical_analysis(self):
-        # Llamar al analizador léxico
-        text = self.code_text_area.get(1.0, tk.END).strip()  # <-- strip aquí
-        try:
-            tokens = analizador_lexico(text)  # Esto ya devuelve tu lista de tokens
+        text_widget = self.code_text_area
+        text = text_widget.get(1.0, tk.END)
 
-            # Crear o limpiar el área de salida en la pestaña de léxico
-            output = self.create_output_area(self.lexicon_tab)
+        # Limpiar etiquetas anteriores del área de código
+        for tag in text_widget.tag_names():
+            text_widget.tag_delete(tag)
+
+        try:
+            tokens = lexical_analyzer(text)
 
             if not tokens:
-                output.insert(tk.END, "No se encontraron tokens.")
-            else:
-                output.insert(tk.END, "Resultado del análisis léxico:\n\n")
-                for token in tokens:
-                    output.insert(tk.END, f"{token}\n")  # Mostrar cada token
+                return
 
-            output.config(state=tk.DISABLED)  # Bloquea la edición
+            # Limpiar y preparar el área de resultados
+            output = self.create_output_area(self.lexicon_tab)
+            output.insert(tk.END, "Lexemes found (with line and column):\n\n")
+
+            # Aplicar colores en code_text_area y mostrar tokens en el área de resultados
+            for idx, token in enumerate(tokens):
+                if len(token) >= 5:
+                    token_type, lexeme, color, line, column = token
+
+                    # Resaltado en code_text_area
+                    start_index = f"{line}.{column - 1}"
+                    end_index = f"{line}.{column - 1 + len(lexeme)}"
+                    tag_name = f"token_{idx}"
+                    text_widget.tag_add(tag_name, start_index, end_index)
+                    text_widget.tag_config(tag_name, foreground=color)
+
+                    # Mostrar en output con el mismo color
+                    output_tag = f"output_token_{idx}"
+                    output.insert(tk.END, f"{lexeme} ({token_type}) (Line: {line}, Column: {column})\n", output_tag)
+                    output.tag_config(output_tag, foreground=color)
+
+            output.config(state=tk.DISABLED)
 
         except SyntaxError as e:
             output = self.create_output_area(self.lexicon_tab)
-            output.insert(tk.END, f"Error léxico: {e}")
+            output.insert(tk.END, f"Lexical error: {e}")
             output.config(state=tk.DISABLED)
 
     def syntactic_analysis(self):
