@@ -151,6 +151,7 @@ class Compiler_GUI:
         style.configure("TEntry", background=self.ENTRY_BG, foreground=self.TEXT_COLOR, insertcolor=self.TEXT_COLOR, padding=(5,5), borderwidth=1) 
 
 
+
     def create_menu_bar(self):
         menubar = tk.Menu(self.root, bg=self.BORDER_COLOR, fg=self.TEXT_COLOR)
 
