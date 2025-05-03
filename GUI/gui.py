@@ -1,5 +1,6 @@
-import tkinter as tk
+import tkinter as tk, os, sys
 from tkinter import messagebox, ttk, filedialog
+from analyzer import lexical_analyzer
 
 class Compiler_GUI:
     def __init__(self, root):
@@ -21,12 +22,18 @@ class Compiler_GUI:
         self.DARK_GRAY_SCROLL = "#1E1E1E"
         self.DARKER_GRAY_SCROLL = "#121212"
         self.BORDER_SCROLL = "#1E1E1E"
-    
         
         # aqui creo la ventana principal
         self.root = root
         self.root.title("Compiler Interface")
         self.root.configure(padx=0, pady=0, bg=self.BG_COLOR)
+        
+        self.fullscreen = True  # Estado inicial
+        self.root.attributes('-fullscreen', True)
+
+        # Asignar eventos de teclado
+        self.root.bind("<F11>", self.toggle_fullscreen)  # Alternar con F11
+        self.root.bind("<Escape>", self.exit_fullscreen)  # Salir con Escape
 
         #configuracion de estilo del ttk(notebooks y tabs)
         self.configure_styles()
@@ -155,6 +162,14 @@ class Compiler_GUI:
     def create_menu_bar(self):
         menubar = tk.Menu(self.root, bg=self.BORDER_COLOR, fg=self.TEXT_COLOR)
 
+        def resource_path(relative_path):
+            """ Obtiene la ruta correcta dentro del ejecutable o normal en visual """
+            if getattr(sys, 'frozen', False):  # Si el script está compilado con PyInstaller
+                base_path = sys._MEIPASS  # Carpeta temporal donde PyInstaller guarda archivos
+            else:
+                base_path = os.path.abspath(".")  # Carpeta normal en modo desarrollo
+            return os.path.join(base_path, relative_path)
+
         # menu archive
         file_menu = tk.Menu(menubar, tearoff=0, bg=self.TAB_BG, fg=self.TEXT_COLOR)
         file_menu.add_command(label="New", command=self.new_file)
@@ -162,7 +177,8 @@ class Compiler_GUI:
         file_menu.add_command(label="Save", command=self.save_file)
         file_menu.add_command(label="Save As", command=self.save_file_as)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.root.quit)
+        #file_menu.add_command(label="Exit", command=self.root.quit)
+        file_menu.add_command(label="Exit", command=self.close_file)
         menubar.add_cascade(label="File", menu=file_menu)
 
         # Menú Compilar
@@ -187,9 +203,79 @@ class Compiler_GUI:
 
         self.root.config(menu=menubar)
 
+        # Crear una segunda barra (frame) para los botones con íconos
+        icon_bar = tk.Frame(self.root, bg=self.BORDER_COLOR)
+        icon_bar.grid(row=1, column=0, sticky="ew", padx=10)
+        # Cargar imágenes para los botones
+        self.new_icon = tk.PhotoImage(file=resource_path("icons/new.png")).subsample(15, 15)
+        self.open_icon = tk.PhotoImage(file=resource_path("icons/open.png")).subsample(17, 17)
+        self.save_icon = tk.PhotoImage(file=resource_path("icons/save.png")).subsample(23, 23)
+        self.saveas_icon = tk.PhotoImage(file=resource_path("icons/save_as.png")).subsample(20, 20)
+        self.exit_icon = tk.PhotoImage(file=resource_path("icons/exit.png")).subsample(20, 20)
+
+        # Crear botones con imágenes para la barra de íconos
+        btn_new = tk.Button(icon_bar, image=self.new_icon, command=self.new_file, borderwidth=1, width=25, height=25)
+        btn_open = tk.Button(icon_bar, image=self.open_icon, command=self.open_file, borderwidth=1, width=25, height=25)
+        btn_save = tk.Button(icon_bar, image=self.save_icon, command=self.save_file, borderwidth=1, width=25, height=25)
+        btn_saveas = tk.Button(icon_bar, image=self.saveas_icon, command=self.save_file_as, borderwidth=1, width=25, height=25)
+        btn_exit = tk.Button(icon_bar, image=self.exit_icon, command=self.close_file, borderwidth=1, width=25, height=25)
+        #btn_exit = tk.Button(icon_bar, image=self.exit_icon, command=self.root.quit, borderwidth=1, width=25, height=25)
+
+        # Posicionar botones en la barra de íconos
+        btn_new.grid(row=0, column=0, padx=2, pady=2)
+        btn_open.grid(row=0, column=1, padx=2, pady=2)
+        btn_save.grid(row=0, column=2, padx=2, pady=2)
+        btn_saveas.grid(row=0, column=3, padx=2, pady=2)
+        btn_exit.grid(row=0, column=4, padx=2, pady=2)
+
+    def create_output_area(self, frame):
+        for widget in frame.winfo_children():
+            widget.destroy()
+        output = tk.Text(frame, wrap="word", bg=self.TEXT_BG, fg=self.TEXT_COLOR, font=("Consolas", 12))
+        output.pack(expand=True, fill="both")
+        return output
+
     def lexical_analysis(self):
-        # Llamar al analizador léxico
-        print("Análisis léxico ejecutado")
+        text_widget = self.code_text_area
+        text = text_widget.get(1.0, tk.END)
+
+        # Limpiar etiquetas anteriores del área de código
+        for tag in text_widget.tag_names():
+            text_widget.tag_delete(tag)
+
+        try:
+            tokens = lexical_analyzer(text)
+
+            if not tokens:
+                return
+
+            # Limpiar y preparar el área de resultados
+            output = self.create_output_area(self.lexicon_tab)
+            output.insert(tk.END, "Lexemes found (with line and column):\n\n")
+
+            # Aplicar colores en code_text_area y mostrar tokens en el área de resultados
+            for idx, token in enumerate(tokens):
+                if len(token) >= 5:
+                    token_type, lexeme, color, line, column = token
+
+                    # Resaltado en code_text_area
+                    start_index = f"{line}.{column - 1}"
+                    end_index = f"{line}.{column - 1 + len(lexeme)}"
+                    tag_name = f"token_{idx}"
+                    text_widget.tag_add(tag_name, start_index, end_index)
+                    text_widget.tag_config(tag_name, foreground=color)
+
+                    # Mostrar en output con el mismo color
+                    output_tag = f"output_token_{idx}"
+                    output.insert(tk.END, f"{lexeme} ({token_type}) (Line: {line}, Column: {column})\n", output_tag)
+                    output.tag_config(output_tag, foreground=color)
+
+            output.config(state=tk.DISABLED)
+
+        except SyntaxError as e:
+            output = self.create_output_area(self.lexicon_tab)
+            output.insert(tk.END, f"Lexical error: {e}")
+            output.config(state=tk.DISABLED)
 
     def syntactic_analysis(self):
         # Llamar al analizador sintáctico
@@ -243,6 +329,14 @@ class Compiler_GUI:
             self.root.title(f"Compiler Interface - {file_path}")
         print("Guardar archivo como")
 
+    def close_file(self):
+        """ Cierra el archivo actual sin cerrar la aplicación """
+        self.code_text_area.delete(1.0, tk.END)  # Limpia el área de texto
+        self.current_file = None
+        self.root.title("Compiler Interface - Sin archivo abierto")
+        self.update_line_numbers()
+        print("Archivo cerrado")
+
     def copy_text(self):
         self.root.clipboard_clear()
         self.root.clipboard_append(self.code_text_area.selection_get())
@@ -260,6 +354,7 @@ class Compiler_GUI:
         """Maneja la actualización de números de línea y posición del cursor."""
         self.update_line_numbers()
         self.update_line_column()
+        self.lexical_analysis()
 
     def update_line_column(self, event=None):
         """Actualiza la posición actual del cursor."""
@@ -307,3 +402,13 @@ class Compiler_GUI:
         self.code_text_area.yview(*args)
         self.line_numbers.yview(*args)
         self.update_line_numbers()
+
+
+    #Configuracion pantalla completa
+    def toggle_fullscreen(self, event=None):
+        self.fullscreen = not self.fullscreen
+        self.root.attributes('-fullscreen', self.fullscreen)
+
+    def exit_fullscreen(self, event=None):
+        self.fullscreen = False
+        self.root.attributes('-fullscreen', False)
