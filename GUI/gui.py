@@ -95,7 +95,7 @@ class Compiler_GUI:
         # Pestañas de retroalimentacion sobre lexico, semantica, y esas cosas
         self.top_tab = ttk.Notebook(root)
         self.top_tab.configure(style="TNotebook")
-        self.top_tab.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        self.top_tab.grid(row=0, column=1, sticky="nsew", padx=10, pady=10,)
 
         # Pestañas frame lateral derecho
         self.lexicon_tab = ttk.Frame(self.top_tab)
@@ -111,7 +111,6 @@ class Compiler_GUI:
         self.top_tab.add(self.inter_code_tab, text="Intermediate Code")
 
         # Configuración del grid para la ventana principal
-        self.root.grid_columnconfigure(0, weight=3)
         self.root.grid_columnconfigure(1, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
 
@@ -134,6 +133,11 @@ class Compiler_GUI:
         self.root.grid_rowconfigure(0, weight=1)  # area de texto
         self.root.grid_rowconfigure(2, weight=1)  # frame inferior
         self.root.grid_columnconfigure(0, weight=2)  # namas una columna
+
+        self.bottom_tab.config(height=100)
+        self.bottom_tab.grid_propagate(False)
+        self.top_tab.config(width=200)
+        self.top_tab.grid_propagate(False)
 
         
     def configure_styles(self):
@@ -231,51 +235,56 @@ class Compiler_GUI:
     def create_output_area(self, frame):
         for widget in frame.winfo_children():
             widget.destroy()
-        output = tk.Text(frame, wrap="word", bg=self.TEXT_BG, fg=self.TEXT_COLOR, font=("Consolas", 12))
+        output = tk.Text(frame, wrap="word", bg=self.TEXT_BG, fg=self.TEXT_COLOR, font=("Consolas", 12), height=4)
         output.pack(expand=True, fill="both")
         return output
 
+
     def lexical_analysis(self):
+        """Realiza el análisis léxico del contenido del área de texto, 
+        resalta los lexemas válidos y muestra los errores por separado."""
         text_widget = self.code_text_area
         text = text_widget.get(1.0, tk.END)
 
-        # Limpiar etiquetas anteriores del área de código
+        # Ejecutar el análisis léxico
+        tokens = lexical_analyzer(text)
+
+        # Eliminar etiquetas anteriores
         for tag in text_widget.tag_names():
             text_widget.tag_delete(tag)
 
-        try:
-            tokens = lexical_analyzer(text)
+        if not tokens:
+            return
 
-            if not tokens:
-                return
+        # Limpiar y preparar las dos áreas de salida
+        output_valid = self.create_output_area(self.lexicon_tab)
+        output_error = self.create_output_area(self.error_lexicon_tab)
 
-            # Limpiar y preparar el área de resultados
-            output = self.create_output_area(self.lexicon_tab)
-            output.insert(tk.END, "Lexemes found (with line and column):\n\n")
+        # Mostrar tokens válidos y errores
+        for idx, token in enumerate(tokens):
+            if len(token) >= 5:
+                token_type, lexeme, color, line, column = token
+                start_index = f"{line}.{column - 1}"
+                end_index = f"{line}.{column - 1 + len(lexeme)}"
+                tag_name = f"token_{idx}"
+                text_widget.tag_add(tag_name, start_index, end_index)
+                text_widget.tag_config(tag_name, foreground=color)
 
-            # Aplicar colores en code_text_area y mostrar tokens en el área de resultados
-            for idx, token in enumerate(tokens):
-                if len(token) >= 5:
-                    token_type, lexeme, color, line, column = token
-
-                    # Resaltado en code_text_area
-                    start_index = f"{line}.{column - 1}"
-                    end_index = f"{line}.{column - 1 + len(lexeme)}"
-                    tag_name = f"token_{idx}"
-                    text_widget.tag_add(tag_name, start_index, end_index)
-                    text_widget.tag_config(tag_name, foreground=color)
-
-                    # Mostrar en output con el mismo color
+                if token_type != 'invalid':
+                    # Token válido
                     output_tag = f"output_token_{idx}"
-                    output.insert(tk.END, f"{lexeme} ({token_type}) (Line: {line}, Column: {column})\n", output_tag)
-                    output.tag_config(output_tag, foreground=color)
+                    output_valid.insert(
+                        tk.END, f"{lexeme} ({token_type}) (Línea: {line}, Columna: {column})\n", output_tag)
+                    output_valid.tag_config(output_tag, foreground=color)
+                else:
+                    # Token inválido
+                    output_error.insert(
+                        tk.END, f"Error: '{lexeme}' no reconocido (Línea: {line}, Columna: {column})\n", "error")
+                    output_error.tag_config("error", foreground="#FF0000")
 
-            output.config(state=tk.DISABLED)
+        output_valid.config(state=tk.DISABLED)
+        output_error.config(state=tk.DISABLED)
 
-        except SyntaxError as e:
-            output = self.create_output_area(self.lexicon_tab)
-            output.insert(tk.END, f"Lexical error: {e}")
-            output.config(state=tk.DISABLED)
 
     def syntactic_analysis(self):
         # Llamar al analizador sintáctico
@@ -310,6 +319,7 @@ class Compiler_GUI:
             self.current_file = file_path
             self.root.title(f"Compiler Interface - {file_path}")
         self.update_line_numbers()
+        self.lexical_analysis()
         print("Abrir archivo")
 
     def save_file(self):
