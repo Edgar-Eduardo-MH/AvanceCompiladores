@@ -242,7 +242,8 @@ class Compiler_GUI:
 
     def lexical_analysis(self):
         """Realiza el análisis léxico del contenido del área de texto, 
-        resalta los lexemas válidos y muestra los errores por separado."""
+        resalta los lexemas válidos, muestra los errores por separado 
+        y guarda los resultados en archivos de texto."""
         text_widget = self.code_text_area
         text = text_widget.get(1.0, tk.END)
 
@@ -260,6 +261,10 @@ class Compiler_GUI:
         output_valid = self.create_output_area(self.lexicon_tab)
         output_error = self.create_output_area(self.error_lexicon_tab)
 
+        # Listas para guardar líneas a escribir en archivos
+        token_lines = []
+        error_lines = []
+
         # Mostrar tokens válidos y errores
         for idx, token in enumerate(tokens):
             if len(token) >= 5:
@@ -273,18 +278,28 @@ class Compiler_GUI:
                 if token_type != 'invalid':
                     # Token válido
                     output_tag = f"output_token_{idx}"
-                    output_valid.insert(
-                        tk.END, f"{lexeme} ({token_type}) (Línea: {line}, Columna: {column})\n", output_tag)
+                    token_str = f"{lexeme} ({token_type}) (Line: {line}, Column: {column})\n"
+                    output_valid.insert(tk.END, token_str, output_tag)
                     output_valid.tag_config(output_tag, foreground=color)
+                    token_lines.append(token_str)
                 else:
                     # Token inválido
-                    output_error.insert(
-                        tk.END, f"Error: '{lexeme}' no reconocido (Línea: {line}, Columna: {column})\n", "error")
+                    error_str = f"Error: '{lexeme}' no reconocido (Line: {line}, Column: {column})\n"
+                    output_error.insert(tk.END, error_str, "error")
                     output_error.tag_config("error", foreground="#FF0000")
+                    error_lines.append(error_str)
 
+        # Deshabilitar edición de áreas de salida
         output_valid.config(state=tk.DISABLED)
         output_error.config(state=tk.DISABLED)
 
+        # Guardar tokens y errores en archivos
+        with open("tokens.txt", "w", encoding="utf-8") as token_file:
+            token_file.writelines(token_lines)
+
+        with open("errors.txt", "w", encoding="utf-8") as error_file:
+            error_file.writelines(error_lines)
+    
 
     def syntactic_analysis(self):
         # Llamar al analizador sintáctico
@@ -422,3 +437,8 @@ class Compiler_GUI:
     def exit_fullscreen(self, event=None):
         self.fullscreen = False
         self.root.attributes('-fullscreen', False)
+
+    def save_to_file(filename, lines):
+        """Escribe en el archivo y lo sobreescribe si ya existe"""
+        with open(filename, "w", encoding="utf-8") as f:
+            f.writelines(lines)
