@@ -1,0 +1,2 @@
+Error: '@' no reconocido (Line: 1, Column: 18)
+Error: '.' no reconocido (Line: 1, Column: 36)

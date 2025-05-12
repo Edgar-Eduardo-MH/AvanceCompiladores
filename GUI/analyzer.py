@@ -15,7 +15,7 @@ COLORS = {
 # Palabras reservadas del lenguaje
 KEYWORDS = {
     'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'float', 'main',
-    'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return'
+    'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return', 'then'
 }
 
 # Patrones para los distintos tipos de tokens
