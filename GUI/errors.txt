@@ -1,2 +1,3 @@
-Error: '@' no reconocido (Line: 1, Column: 18)
-Error: '.' no reconocido (Line: 1, Column: 36)
+Error: '@' no reconocido (Line: 1, Column: 9)
+Error numérico: '32.' no es un número real válido (Línea: 1, Columna: 25)
+Error numérico: '.' no es un número real válido (Línea: 2, Columna: 6)

@@ -272,6 +272,11 @@ class Compiler_GUI:
                 start_index = f"{line}.{column - 1}"
                 end_index = f"{line}.{column - 1 + len(lexeme)}"
                 tag_name = f"token_{idx}"
+                
+                # Si es un comentario, solo resaltarlo en el editor y continuar
+                if token_type == 'comment':
+                    continue  # No lo añadimos a ninguna de las áreas de salida ni archivos
+
                 text_widget.tag_add(tag_name, start_index, end_index)
                 text_widget.tag_config(tag_name, foreground=color)
 
@@ -283,8 +288,16 @@ class Compiler_GUI:
                     output_valid.tag_config(output_tag, foreground=color)
                     token_lines.append(token_str)
                 else:
-                    # Token inválido
-                    error_str = f"Error: '{lexeme}' no reconocido (Line: {line}, Column: {column})\n"
+                    # Token inválido — se resalta en rojo también
+                    tag_error = f"error_token_{idx}"
+                    text_widget.tag_add(tag_error, start_index, end_index)
+                    text_widget.tag_config(tag_error, foreground="#FF0000")
+
+                    if lexeme.endswith('.'):
+                        error_str = f"Error numérico: '{lexeme}' no es un número real válido (Línea: {line}, Columna: {column})\n"
+                    else:
+                        error_str = f"Error: '{lexeme}' no reconocido (Line: {line}, Column: {column})\n"
+    
                     output_error.insert(tk.END, error_str, "error")
                     output_error.tag_config("error", foreground="#FF0000")
                     error_lines.append(error_str)
