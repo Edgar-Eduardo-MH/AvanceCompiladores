@@ -22,16 +22,20 @@ KEYWORDS = {
 PATTERNS = [
     ('multiline_comment', r'/\*[\s\S]*?\*/'),       # Comentario multilínea estilo C
     ('singleline_comment', r'#.*'),                 # Comentario de una línea estilo Python
-    ('real_number', r'[+-]?\d+\.\d+'),              # Número real (positivo o negativo)
-    ('invalid_real_number_multiple_dots', r'[+-]?\d+\.\d+\.'),
-    ('invalid_real_number', r'[+-]?\d+\.'),
-           
-    ('integer_number', r'[+-]?\d+'),                # Número entero
+    
+    ('real_number', r'(?<![A-Za-z0-9_])[-+]?\d+\.\d+(?![\d])'),        # Número real (positivo o negativo)
+    
+    ('invalid_real_number', r'(?<![A-Za-z0-9_])[-+]?\d+\.(?!\d)'),
+
+    ('integer_number', r'(?<![A-Za-z0-9_])[-+]?\d+(?![\d.])'),                # Número entero
+    
     ('logical_relational_operator', r'(\|\||&&|==|!=|<=|>=|<|>)'),  # Operadores relacionales/lógicos
     ('arithmetic_operator', r'(\+\+|--|\+|-|\*|/|%|\^)'),            # Operadores aritméticos
     ('assignment', r'='),                           # Asignación
     ('symbol', r'[\(\)\{\},;]'),                    # Símbolos especiales
+
     ('identifier', r'[A-Za-z_][A-Za-z0-9_]*'),      # Identificador válido
+
     ('whitespace', r'\s+'),                         # Espacios en blanco que se ignoran
 ]
 
