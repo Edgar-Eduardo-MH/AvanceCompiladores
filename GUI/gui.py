@@ -1,6 +1,6 @@
 import tkinter as tk, os, sys
 from tkinter import messagebox, ttk, filedialog
-from analyzer import lexical_analyzer
+from analyzer import lexical_analyzer, Parser
 
 class Compiler_GUI:
     def __init__(self, root):
@@ -27,6 +27,8 @@ class Compiler_GUI:
         self.root = root
         self.root.title("Compiler Interface")
         self.root.configure(padx=0, pady=0, bg=self.BG_COLOR)
+
+        self.last_tokens = None
         
         self.fullscreen = True  # Estado inicial
         self.root.attributes('-fullscreen', True)
@@ -241,9 +243,6 @@ class Compiler_GUI:
 
 
     def lexical_analysis(self):
-        """Realiza el análisis léxico del contenido del área de texto, 
-        resalta los lexemas válidos, muestra los errores por separado 
-        y guarda los resultados en archivos de texto."""
         text_widget = self.code_text_area
         text = text_widget.get(1.0, tk.END)
 
@@ -294,9 +293,9 @@ class Compiler_GUI:
                     text_widget.tag_config(tag_error, foreground="#FF0000")
 
                     if lexeme.endswith('.'):
-                        error_str = f"Error numérico: '{lexeme}' no es un número real válido (Línea: {line}, Columna: {column})\n"
+                        error_str = f"Numerical error: '{lexeme}' it is not a valid real number (Line: {line}, Column: {column})\n"
                     else:
-                        error_str = f"Error: '{lexeme}' no reconocido (Line: {line}, Column: {column})\n"
+                        error_str = f"Error: '{lexeme}' not recognized (Line: {line}, Column: {column})\n"
     
                     output_error.insert(tk.END, error_str, "error")
                     output_error.tag_config("error", foreground="#FF0000")
@@ -312,11 +311,48 @@ class Compiler_GUI:
 
         with open("errors.txt", "w", encoding="utf-8") as error_file:
             error_file.writelines(error_lines)
+
+        self.last_tokens = tokens  # Guardar tokens para reutilizar
+        self.syntactic_analysis()
     
 
     def syntactic_analysis(self):
-        # Llamar al analizador sintáctico
-        print("Análisis sintáctico ejecutado")
+        # Obtener el código fuente del área de texto
+        text_widget = self.code_text_area
+        source_code = text_widget.get(1.0, tk.END)
+
+        # Ejecutar análisis léxico
+        tokens = self.last_tokens if self.last_tokens else lexical_analyzer(source_code)
+
+        # Ejecutar el análisis sintáctico
+        parser = Parser(tokens)
+        ast = parser.parse()
+
+        # Mostrar resultados en la pestaña superior "Syntactic"
+        output_syntax = self.create_output_area(self.syntactic_tab)
+        output_syntax.insert(tk.END, "Syntactic Tree:\n")
+        output_syntax.insert(tk.END, "AST will follow...\n")  # DEBUG
+        if ast is None:
+            output_syntax.insert(tk.END, "⚠️ No AST generated.\n")
+        else:
+            output_syntax.insert(tk.END, str(ast))
+
+        if parser.errors:
+            output_syntax.insert(tk.END, "\nSyntactic errors:\n", "error")
+            output_syntax.tag_config("error", foreground="red")
+            for err in parser.errors:
+                output_syntax.insert(tk.END, f"{err}\n", "error")
+
+            # Mostrar errores también en la pestaña inferior "Syntactic Error"
+            output_error_syntax = self.create_output_area(self.error_syntactic_tab)
+            output_error_syntax.insert(tk.END, "Syntactic errors:\n", "error")
+            output_error_syntax.tag_config("error", foreground="red")
+            for err in parser.errors:
+                output_error_syntax.insert(tk.END, f"{err}\n", "error")
+            output_error_syntax.config(state=tk.DISABLED)
+
+        output_syntax.config(state=tk.DISABLED)
+
 
     def semantic_analysis(self):
         # Llamar al analizador semántico

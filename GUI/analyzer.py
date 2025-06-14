@@ -14,7 +14,7 @@ COLORS = {
 
 # Palabras reservadas del lenguaje
 KEYWORDS = {
-    'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'float', 'main',
+    'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'end', 'float', 'main', 'until',
     'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return', 'then'
 }
 
@@ -93,6 +93,8 @@ def lexical_analyzer(source_code):
                             real_type = 'keyword'
                         elif token_type.startswith('invalid_real'):
                             real_type = 'invalid'
+                        elif token_type in ['singleline_comment', 'multiline_comment']:
+                            real_type = 'comment'
                         else:
                             real_type = token_type
                         color = COLORS.get(real_type, '#FFFFFF')
@@ -111,3 +113,274 @@ def lexical_analyzer(source_code):
                 position += 1
 
     return tokens
+
+# ANALIZADOR SINTACTICO CORREGIDO Y OPTIMIZADO
+class ASTNode:
+    def __init__(self, type_, value=None, children=None, line=None, column=None):
+        self.type = type_
+        self.value = value
+        self.children = children if children is not None else []
+        self.line = line
+        self.column = column
+
+    def __repr__(self, level=0):
+        indent = "  " * level
+        location = f" (Line: {self.line}, Column: {self.column})" if self.line is not None and self.column is not None else ""
+        repr_str = f"{indent}{self.type}: {self.value if self.value else ''}{location}\n"
+        for child in self.children:
+            repr_str += child.__repr__(level + 1)
+        return repr_str
+
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.pos = 0
+        self.errors = []
+
+    def current_token(self):
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+
+    def match(self, expected_type, expected_value=None):
+        token = self.current_token()
+        if token and token[0] == expected_type and (expected_value is None or token[1] == expected_value):
+            self.pos += 1
+            return token
+        else:
+            if token:
+                self.errors.append(f"Syntax error: expected {expected_type} '{expected_value}', found '{token[1]}' at line {token[3]}, column {token[4]}")
+            else:
+                self.errors.append(f"Syntax error: expected {expected_type} '{expected_value}', but reached end of input")
+            return None
+
+    def parse(self):
+        return self.program()
+
+    def program(self):
+        children = []
+        token = self.match('keyword', 'main')
+        if token:
+            self.match('symbol', '{')
+            decls = self.declaration_list()
+            children.append(decls)
+            self.match('symbol', '}')
+            return ASTNode('Program', children=children, line=token[3], column=token[4])
+        else:
+            self.errors.append("Syntax error: program must start with 'main'")
+            return ASTNode('Error')
+
+    def declaration_list(self):
+        children = []
+        while self.current_token() and self.current_token()[1] != '}':
+            decl = self.declaration()
+            if decl:
+                children.append(decl)
+        return ASTNode('DeclarationList', children=children)
+
+    def declaration(self):
+        token = self.current_token()
+        if token and token[0] == 'keyword' and token[1] in ('int', 'float', 'bool'):
+            return self.variable_declaration()
+        else:
+            stmt = self.statement()
+            if stmt:
+                return ASTNode('Declaration', children=[stmt])
+            return ASTNode('Error')
+
+    def variable_declaration(self):
+        children = []
+        type_token = self.match('keyword')
+        if not type_token:
+            return ASTNode('Error')
+        children.append(ASTNode('Type', value=type_token[1]))
+
+        id_list_node = self.identifier_list()
+        if id_list_node:
+            children.append(id_list_node)
+
+        if not self.match('symbol', ';'):
+            return ASTNode('Error')
+        return ASTNode('VariableDeclaration', children=children)
+
+    def identifier_list(self):
+        children = []
+        id_token = self.match('identifier')
+        if not id_token:
+            return ASTNode('Error')
+        children.append(ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]))
+
+        while self.current_token() and self.current_token()[1] == ',':
+            self.match('symbol', ',')
+            id_token = self.match('identifier')
+            if id_token:
+                children.append(ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]))
+            else:
+                self.errors.append("Expected identifier after ','")
+                return ASTNode('Error')
+        return ASTNode('IdentifierList', children=children)
+
+    def statement_list(self):
+        children = []
+        while self.current_token() and self.current_token()[1] not in ('}', 'end'):
+            stmt = self.statement()
+            if stmt:
+                children.append(stmt)
+        return ASTNode('StatementList', children=children)
+
+    def statement(self):
+        token = self.current_token()
+        if not token:
+            return None
+        if token[1] == 'if':
+            return self.selection()
+        elif token[1] == 'while':
+            return self.iteration()
+        elif token[1] == 'do':
+            return self.repetition()
+        elif token[1] == 'cin':
+            return self.input_statement()
+        elif token[1] == 'cout':
+            return self.output_statement()
+        elif token[0] == 'identifier':
+            return self.assignment()
+        else:
+            self.errors.append(f"Unknown statement starting with '{token[1]}' at line {token[3]}, column {token[4]}")
+            self.pos += 1
+            return ASTNode('Error')
+
+    def assignment(self):
+        id_token = self.match('identifier')
+        if not id_token:
+            return ASTNode('Error')
+        if not self.match('assignment'):
+            return ASTNode('Error')
+        expr = self.logical_expression()
+        self.match('symbol', ';')
+        return ASTNode('Assignment', children=[
+            ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]),
+            expr
+        ], line=id_token[3], column=id_token[4])
+
+    def selection(self):
+        self.match('keyword', 'if')
+        condition = self.logical_expression()
+        self.match('keyword', 'then')
+        then_branch = self.statement_list()
+        else_branch = None
+        if self.current_token() and self.current_token()[1] == 'else':
+            self.match('keyword', 'else')
+            else_branch = self.statement_list()
+        self.match('keyword', 'end')
+        children = [condition, then_branch]
+        if else_branch:
+            children.append(else_branch)
+        return ASTNode('IfStatement', children=children)
+
+    def iteration(self):
+        self.match('keyword', 'while')
+        condition = self.logical_expression()
+        body = self.statement_list()
+        self.match('keyword', 'end')
+        return ASTNode('WhileLoop', children=[condition, body])
+
+    def repetition(self):
+        self.match('keyword', 'do')
+        body = self.statement_list()
+        self.match('keyword', 'while')
+        condition = self.logical_expression()
+        return ASTNode('DoWhileLoop', children=[body, condition])
+
+    def input_statement(self):
+        self.match('keyword', 'cin')
+        self.match('operator', '>>')
+        id_token = self.match('identifier')
+        if not id_token:
+            return ASTNode('Error')
+        self.match('symbol', ';')
+        return ASTNode('Input', children=[
+            ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4])
+        ])
+
+    def output_statement(self):
+        self.match('keyword', 'cout')
+        self.match('operator', '<<')
+        children = []
+        while True:
+            token = self.current_token()
+            if not token or token[1] in (';', '}'):
+                break
+            if token[0] == 'string':
+                str_token = self.match('string')
+                children.append(ASTNode('String', value=str_token[1], line=str_token[3], column=str_token[4]))
+            else:
+                children.append(self.logical_expression())
+            if self.current_token() and self.current_token()[1] == '<<':
+                self.match('operator', '<<')
+            else:
+                break
+        self.match('symbol', ';')
+        return ASTNode('Output', children=children)
+
+    def logical_expression(self):
+        node = self.expression()
+        while self.current_token() and self.current_token()[0] == 'logical_op':
+            op_token = self.match('logical_op')
+            right = self.expression()
+            node = ASTNode('LogicalExpression', value=op_token[1], children=[node, right])
+        return node
+
+    def expression(self):
+        left = self.simple_expression()
+        if self.current_token() and self.current_token()[0] == 'relational_op':
+            op_token = self.match('relational_op')
+            right = self.simple_expression()
+            return ASTNode('RelationalExpression', value=op_token[1], children=[left, right])
+        return left
+
+    def simple_expression(self):
+        node = self.term()
+        while self.current_token() and self.current_token()[0] == 'add_op':
+            op_token = self.match('add_op')
+            right = self.term()
+            node = ASTNode('AddExpression', value=op_token[1], children=[node, right])
+        return node
+
+    def term(self):
+        node = self.factor()
+        while self.current_token() and self.current_token()[0] == 'mul_op':
+            op_token = self.match('mul_op')
+            right = self.factor()
+            node = ASTNode('MulExpression', value=op_token[1], children=[node, right])
+        return node
+
+    def factor(self):
+        node = self.component()
+        while self.current_token() and self.current_token()[0] == 'pow_op':
+            op_token = self.match('pow_op')
+            right = self.component()
+            node = ASTNode('PowExpression', value=op_token[1], children=[node, right])
+        return node
+
+    def component(self):
+        token = self.current_token()
+        if not token:
+            self.errors.append("Unexpected end of input")
+            return ASTNode('Error')
+
+        if token[1] == '(':
+            self.match('symbol', '(')
+            expr = self.logical_expression()
+            self.match('symbol', ')')
+            return expr
+        elif token[0] in ('integer_number', 'real_number'):
+            self.pos += 1
+            return ASTNode('Number', value=token[1], line=token[3], column=token[4])
+        elif token[0] == 'identifier':
+            self.pos += 1
+            return ASTNode('Identifier', value=token[1], line=token[3], column=token[4])
+        elif token[0] == 'boolean':
+            self.pos += 1
+            return ASTNode('Boolean', value=token[1], line=token[3], column=token[4])
+        else:
+            self.errors.append(f"Invalid component starting with '{token[1]}' at line {token[3]}, column {token[4]}")
+            self.pos += 1
+            return ASTNode('Error')
