@@ -15,7 +15,7 @@ COLORS = {
 # Palabras reservadas del lenguaje
 KEYWORDS = {
     'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'end', 'float', 'main', 'until',
-    'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return', 'then'
+    'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return', 'then', 'cin', 'cout'
 }
 
 # Patrones para los distintos tipos de tokens
@@ -29,6 +29,14 @@ PATTERNS = [
 
     ('integer_number', r'(?<![A-Za-z0-9_])[-+]?\d+(?![\d.])'),                # Número entero
     
+    ('unary_op', r'(\+\+|--)'),
+    ('logical_op', r'(\|\||&&)'),
+    ('relational_op', r'(==|!=|<=|>=|<|>)'),
+    ('add_op', r'(\+|-)'),
+    ('mul_op', r'(\*|/|%)'),
+    ('pow_op', r'(\^)'),
+    ('io_operator', r'(>>|<<)'),
+
     ('logical_relational_operator', r'(\|\||&&|==|!=|<=|>=|<|>)'),  # Operadores relacionales/lógicos
     ('arithmetic_operator', r'(\+\+|--|\+|-|\*|/|%|\^)'),            # Operadores aritméticos
     ('assignment', r'='),                           # Asignación
@@ -153,7 +161,9 @@ class Parser:
             return None
 
     def parse(self):
-        return self.program()
+        ast = self.program()
+        self.clean_errors()
+        return ast
 
     def program(self):
         children = []
@@ -220,10 +230,14 @@ class Parser:
 
     def statement_list(self):
         children = []
-        while self.current_token() and self.current_token()[1] not in ('}', 'end'):
+        while self.current_token() and self.current_token()[1] not in ('}', 'end', 'else', 'until'):
             stmt = self.statement()
-            if stmt:
+            if stmt and stmt.type != 'Error':
                 children.append(stmt)
+            else:
+                # Avanzar para evitar bucle infinito
+                if self.current_token():
+                    self.pos += 1
         return ASTNode('StatementList', children=children)
 
     def statement(self):
@@ -241,6 +255,13 @@ class Parser:
         elif token[1] == 'cout':
             return self.output_statement()
         elif token[0] == 'identifier':
+            next_token = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
+            if next_token and next_token[0] == 'unary_op':
+                id_token = self.match('identifier')
+                op_token = self.match('unary_op')
+                self.match('symbol', ';')
+                return ASTNode('UnaryOperation', value=op_token[1], children=[
+                    ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4])], line=op_token[3], column=op_token[4])
             return self.assignment()
         else:
             self.errors.append(f"Unknown statement starting with '{token[1]}' at line {token[3]}, column {token[4]}")
@@ -261,71 +282,152 @@ class Parser:
         ], line=id_token[3], column=id_token[4])
 
     def selection(self):
-        self.match('keyword', 'if')
+        if_token = self.match('keyword', 'if')
+        if not if_token:
+            return ASTNode('Error')
+        
         condition = self.logical_expression()
-        self.match('keyword', 'then')
-        then_branch = self.statement_list()
+        if not condition:
+            return ASTNode('Error')
+        
+        if not self.match('keyword', 'then'):
+            self.errors.append(f"Expected 'then' after if condition at line {if_token[3]}, column {if_token[4]}")
+            return ASTNode('Error')
+        
+        then_branch = ASTNode('ThenBlock', children=[self.statement_list()])
+        
         else_branch = None
         if self.current_token() and self.current_token()[1] == 'else':
             self.match('keyword', 'else')
-            else_branch = self.statement_list()
-        self.match('keyword', 'end')
+            else_branch = ASTNode('ElseBlock', children=[self.statement_list()])
+        
+        if not self.match('keyword', 'end'):
+            self.errors.append(f"Expected 'end' after if statement at line {if_token[3]}, column {if_token[4]}")
+            return ASTNode('Error')
+        
         children = [condition, then_branch]
         if else_branch:
             children.append(else_branch)
-        return ASTNode('IfStatement', children=children)
+        
+        return ASTNode('IfStatement', children=children, line=if_token[3], column=if_token[4])
 
     def iteration(self):
-        self.match('keyword', 'while')
+        while_token = self.match('keyword', 'while')
+        if not while_token:
+            return ASTNode('Error')
+        
         condition = self.logical_expression()
+        if not condition:
+            return ASTNode('Error')
+        
         body = self.statement_list()
-        self.match('keyword', 'end')
-        return ASTNode('WhileLoop', children=[condition, body])
+        
+        if not self.match('keyword', 'end'):
+            self.errors.append(f"Expected 'end' after while loop at line {while_token[3]}, column {while_token[4]}")
+            return ASTNode('Error')
+        
+        return ASTNode('WhileLoop', children=[condition, body],
+                    line=while_token[3], column=while_token[4])
 
+    # Modificar el método repetition:
     def repetition(self):
-        self.match('keyword', 'do')
+        do_token = self.match('keyword', 'do')
+        if not do_token:
+            return ASTNode('Error')
+        
         body = self.statement_list()
-        self.match('keyword', 'while')
-        condition = self.logical_expression()
-        return ASTNode('DoWhileLoop', children=[body, condition])
+        
+        # Manejar tanto 'while' como 'until'
+        if self.current_token() and self.current_token()[1] in ('while', 'until'):
+            keyword = self.current_token()[1]
+            self.match('keyword')
+            condition = self.logical_expression()
+            
+            # Manejar bloque while interno si existe
+            inner_while = None
+            if keyword == 'while' and self.current_token() and self.current_token()[1] != 'end':
+                inner_body = self.statement_list()
+                inner_while = ASTNode('WhileLoop', children=[condition, inner_body])
+                body.children.append(inner_while)
+            
+            if not self.match('keyword', 'end'):
+                self.errors.append(f"Expected 'end' after do-{keyword} at line {do_token[3]}, column {do_token[4]}")
+                return ASTNode('Error')
+            
+            node_type = 'DoWhileLoop' if keyword == 'while' else 'DoUntilLoop'
+            return ASTNode(node_type, children=[body, condition], 
+                        line=do_token[3], column=do_token[4])
+        
+        self.errors.append("Expected 'while' or 'until' after do block")
+        return ASTNode('Error')
 
+    # Modificar input_statement y output_statement:
     def input_statement(self):
-        self.match('keyword', 'cin')
-        self.match('operator', '>>')
+        cin_token = self.match('keyword', 'cin')
+        if not cin_token:
+            return ASTNode('Error')
+        
+        if not self.match('io_operator', '>>'):
+            self.errors.append(f"Expected '>>' after cin at line {cin_token[3]}, column {cin_token[4]}")
+            return ASTNode('Error')
+        
         id_token = self.match('identifier')
         if not id_token:
+            self.errors.append(f"Expected identifier after '>>' at line {cin_token[3]}, column {cin_token[4] + 2}")
             return ASTNode('Error')
-        self.match('symbol', ';')
+        
+        if not self.match('symbol', ';'):
+            self.errors.append(f"Expected ';' after input statement at line {id_token[3]}, column {id_token[4]}")
+            return ASTNode('Error')
+        
         return ASTNode('Input', children=[
             ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4])
-        ])
+        ], line=cin_token[3], column=cin_token[4])
 
     def output_statement(self):
-        self.match('keyword', 'cout')
-        self.match('operator', '<<')
+        cout_token = self.match('keyword', 'cout')
+        if not cout_token:
+            return ASTNode('Error')
+        
+        if not self.match('io_operator', '<<'):
+            self.errors.append(f"Expected '<<' after cout at line {cout_token[3]}, column {cout_token[4]}")
+            return ASTNode('Error')
+        
         children = []
         while True:
             token = self.current_token()
             if not token or token[1] in (';', '}'):
                 break
+                
             if token[0] == 'string':
                 str_token = self.match('string')
                 children.append(ASTNode('String', value=str_token[1], line=str_token[3], column=str_token[4]))
             else:
-                children.append(self.logical_expression())
+                expr = self.logical_expression()
+                if expr:
+                    children.append(expr)
+            
             if self.current_token() and self.current_token()[1] == '<<':
-                self.match('operator', '<<')
+                self.match('io_operator', '<<')
             else:
                 break
-        self.match('symbol', ';')
-        return ASTNode('Output', children=children)
+        
+        if not self.match('symbol', ';'):
+            self.errors.append(f"Expected ';' after output statement at line {cout_token[3]}, column {cout_token[4]}")
+            return ASTNode('Error')
+        
+        return ASTNode('Output', children=children, line=cout_token[3], column=cout_token[4])
 
     def logical_expression(self):
         node = self.expression()
         while self.current_token() and self.current_token()[0] == 'logical_op':
             op_token = self.match('logical_op')
             right = self.expression()
-            node = ASTNode('LogicalExpression', value=op_token[1], children=[node, right])
+            if not right:
+                return ASTNode('Error')
+            node = ASTNode('LogicalExpression', value=op_token[1], 
+                        children=[node, right],
+                        line=op_token[3], column=op_token[4])
         return node
 
     def expression(self):
@@ -360,27 +462,57 @@ class Parser:
             node = ASTNode('PowExpression', value=op_token[1], children=[node, right])
         return node
 
+    # Modificar el método component:
     def component(self):
         token = self.current_token()
         if not token:
-            self.errors.append("Unexpected end of input")
             return ASTNode('Error')
-
+        
         if token[1] == '(':
             self.match('symbol', '(')
             expr = self.logical_expression()
-            self.match('symbol', ')')
+            if not expr:
+                return ASTNode('Error')
+            if not self.match('symbol', ')'):
+                self.errors.append(f"Expected closing ')' at line {token[3]}, column {token[4]}")
+                return ASTNode('Error')
             return expr
-        elif token[0] in ('integer_number', 'real_number'):
+        
+        # Manejar números negativos
+        if token[1] in ('+', '-'):
+            op_token = self.match('add_op')
+            num = self.match('integer_number') or self.match('real_number')
+            if num:
+                return ASTNode('UnaryExpression', value=op_token[1],
+                            children=[ASTNode('Number', value=num[1], 
+                                            line=num[3], column=num[4])],
+                            line=op_token[3], column=op_token[4])
+        
+        if token[0] in ('integer_number', 'real_number'):
             self.pos += 1
-            return ASTNode('Number', value=token[1], line=token[3], column=token[4])
-        elif token[0] == 'identifier':
+            return ASTNode('Number', value=token[1], 
+                        line=token[3], column=token[4])
+        
+        if token[0] == 'identifier':
             self.pos += 1
-            return ASTNode('Identifier', value=token[1], line=token[3], column=token[4])
-        elif token[0] == 'boolean':
+            return ASTNode('Identifier', value=token[1], 
+                        line=token[3], column=token[4])
+        
+        if token[0] == 'boolean':
             self.pos += 1
-            return ASTNode('Boolean', value=token[1], line=token[3], column=token[4])
-        else:
-            self.errors.append(f"Invalid component starting with '{token[1]}' at line {token[3]}, column {token[4]}")
-            self.pos += 1
-            return ASTNode('Error')
+            return ASTNode('Boolean', value=token[1],
+                        line=token[3], column=token[4])
+        
+        self.errors.append(f"Invalid expression component at line {token[3]}, column {token[4]}")
+        self.pos += 1
+        return ASTNode('Error')
+
+    def clean_errors(self):
+        unique_errors = []
+        seen_lines = set()
+        for error in self.errors:
+            line = error.split('line')[-1].split(',')[0].strip()
+            if line not in seen_lines:
+                seen_lines.add(line)
+                unique_errors.append(error)
+        self.errors = unique_errors
