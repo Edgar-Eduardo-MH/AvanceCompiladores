@@ -15,7 +15,8 @@ COLORS = {
 # Palabras reservadas del lenguaje
 KEYWORDS = {
     'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'end', 'float', 'main', 'until',
-    'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return', 'then'
+    'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return', 'then',
+    'cin', 'cout', 'true', 'false'
 }
 
 # Patrones para los distintos tipos de tokens
@@ -23,16 +24,22 @@ PATTERNS = [
     ('multiline_comment', r'/\*[\s\S]*?\*/'),       # Comentario multilínea estilo C
     ('singleline_comment', r'#.*'),                 # Comentario de una línea estilo Python
     
-    ('real_number', r'(?<![A-Za-z0-9_])[-+]?\d+\.\d+(?![\d])'),        # Número real (positivo o negativo)
+    ('shift_op', r'<<|>>'),
+    ('logical_op', r'\|\||&&'),
+    ('relational_op', r'==|!=|<=|>=|<|>'),
+    ('inc_dec_op', r'\+\+|--'),
     
-    ('invalid_real_number', r'(?<![A-Za-z0-9_])[-+]?\d+\.(?!\d)'),
+    ('add_op', r'\+|-'),
+    ('mul_op', r'\*|/|%'),
+    ('pow_op', r'\^'),
 
-    ('integer_number', r'(?<![A-Za-z0-9_])[-+]?\d+(?![\d.])'),                # Número entero
+    ('real_number', r'(?<![A-Za-z0-9_])[-+]?\d+\.\d+(?![\d])'),
+    ('invalid_real_number', r'(?<![A-Za-z0-9_])[-+]?\d+\.(?!\d)'),
+    ('integer_number', r'(?<![A-Za-z0-9_])[-+]?\d+(?![\d.])'),
     
-    ('logical_relational_operator', r'(\|\||&&|==|!=|<=|>=|<|>)'),  # Operadores relacionales/lógicos
-    ('arithmetic_operator', r'(\+\+|--|\+|-|\*|/|%|\^)'),            # Operadores aritméticos
-    ('assignment', r'='),                           # Asignación
-    ('symbol', r'[\(\)\{\},;]'),                    # Símbolos especiales
+    ('string', r'"[^"\n]*"'),
+    ('assignment', r'='),
+    ('symbol', r'[\(\)\{\},;]'),
 
     ('identifier', r'[A-Za-z_][A-Za-z0-9_]*'),      # Identificador válido
 
@@ -162,7 +169,13 @@ class Parser:
             self.match('symbol', '{')
             decls = self.declaration_list()
             children.append(decls)
-            self.match('symbol', '}')
+
+            if not self.current_token():
+                self.errors.append("Expected '}' at end of program")
+            elif self.current_token()[1] == '}':
+                self.match('symbol', '}')
+            else:
+                self.errors.append(f"Unexpected token '{self.current_token()[1]}' before program end")
             return ASTNode('Program', children=children, line=token[3], column=token[4])
         else:
             self.errors.append("Syntax error: program must start with 'main'")
@@ -220,16 +233,24 @@ class Parser:
 
     def statement_list(self):
         children = []
-        while self.current_token() and self.current_token()[1] not in ('}', 'end'):
+        while self.current_token() and self.current_token()[1] not in ('}', 'end', 'else', 'until'):
             stmt = self.statement()
             if stmt:
                 children.append(stmt)
+            elif self.current_token() and self.current_token()[1] in ('}', 'end', 'else', 'until'):
+                break
+            else:
+                self.pos +- 1
         return ASTNode('StatementList', children=children)
 
     def statement(self):
         token = self.current_token()
         if not token:
             return None
+
+        if self.lookahead_inc_dec():
+            return self.inc_dec_statement()
+
         if token[1] == 'if':
             return self.selection()
         elif token[1] == 'while':
@@ -241,11 +262,30 @@ class Parser:
         elif token[1] == 'cout':
             return self.output_statement()
         elif token[0] == 'identifier':
-            return self.assignment()
+            if len(self.tokens) > self.pos + 1 and self.tokens[self.pos + 1][1] == '=':
+                return self.assignment()
+            else:
+                self.error.append(f"Unexpected ifentifier '{token[1]}' at line {token[3]}, column {token[4]}")
+                self.pos += 1
+                return ASTNode('Error')
         else:
             self.errors.append(f"Unknown statement starting with '{token[1]}' at line {token[3]}, column {token[4]}")
             self.pos += 1
             return ASTNode('Error')
+        
+    def lookahead_inc_dec(self):
+        token = self.current_token()
+        next_token = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
+        return token and token[0] == 'identifier' and next_token and next_token[0] == 'inc_dec_op'
+
+    def inc_dec_statement(self):
+        id_token = self.match('identifier')
+        op_token = self.match('inc_dec_op')
+        self.match('symbol', ';')
+        return ASTNode('IncDec', value=op_token[1], children=[
+            ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4])
+        ])
+
 
     def assignment(self):
         id_token = self.match('identifier')
@@ -264,11 +304,22 @@ class Parser:
         self.match('keyword', 'if')
         condition = self.logical_expression()
         self.match('keyword', 'then')
-        then_branch = self.statement_list()
+
+        then_branch = ASTNode('ThenBlock')
+        while self.current_token() and self.current_token()[1] not in ('else', 'end'):
+            stmt = self.statement()
+            if stmt:
+                then_branch.children.append(stmt)
+        
         else_branch = None
         if self.current_token() and self.current_token()[1] == 'else':
             self.match('keyword', 'else')
-            else_branch = self.statement_list()
+            else_branch = ASTNode('ElseBlock')
+            while self.current_token() and self.current_token()[1] != 'end':
+                stmt = self.statement()
+                if stmt:
+                    else_branch.children.append(stmt)
+
         self.match('keyword', 'end')
         children = [condition, then_branch]
         if else_branch:
@@ -284,14 +335,23 @@ class Parser:
 
     def repetition(self):
         self.match('keyword', 'do')
-        body = self.statement_list()
-        self.match('keyword', 'while')
+        body = ASTNode('DoBlock')
+        while self.current_token() and self.current_token()[1] != 'until':
+            stmt = self.statement()
+            if stmt:
+                body.children.append(stmt)
+
+        self.match('keyword', 'until')
         condition = self.logical_expression()
-        return ASTNode('DoWhileLoop', children=[body, condition])
+
+        if self.current_token() and self.current_token()[1] == ';':
+            self.match('symbol', ';')
+        return ASTNode('DoUntilLoop', children=[body, condition])
+
 
     def input_statement(self):
         self.match('keyword', 'cin')
-        self.match('operator', '>>')
+        self.match('shift_op', '>>')
         id_token = self.match('identifier')
         if not id_token:
             return ASTNode('Error')
@@ -302,7 +362,7 @@ class Parser:
 
     def output_statement(self):
         self.match('keyword', 'cout')
-        self.match('operator', '<<')
+        self.match('shift_op', '<<')
         children = []
         while True:
             token = self.current_token()
@@ -314,7 +374,7 @@ class Parser:
             else:
                 children.append(self.logical_expression())
             if self.current_token() and self.current_token()[1] == '<<':
-                self.match('operator', '<<')
+                self.match('shift_op', '<<')
             else:
                 break
         self.match('symbol', ';')
@@ -377,7 +437,10 @@ class Parser:
         elif token[0] == 'identifier':
             self.pos += 1
             return ASTNode('Identifier', value=token[1], line=token[3], column=token[4])
-        elif token[0] == 'boolean':
+        elif token[0] == 'string':
+            self.pos += 1
+            return ASTNode('String', value=token[1], line=token[3], column=token[4])
+        elif token[0] == 'keyword' and token[1] in ('true', 'false'):
             self.pos += 1
             return ASTNode('Boolean', value=token[1], line=token[3], column=token[4])
         else:
