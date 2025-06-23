@@ -282,9 +282,21 @@ class Parser:
         id_token = self.match('identifier')
         op_token = self.match('inc_dec_op')
         self.match('symbol', ';')
-        return ASTNode('IncDec', value=op_token[1], children=[
-            ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4])
+
+        op_symbol = '+' if op_token[1] == '++' else '-'
+
+        # Crea el nodo de suma o resta: x + 1 o x - 1
+        expression_node = ASTNode('AddExpression' if op_symbol == '+' else 'SubExpression', value=op_symbol, children=[
+            ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]),
+            ASTNode('Number', value='1', line=id_token[3], column=id_token[4])
         ])
+
+        # Asignación completa: x = x + 1
+        return ASTNode('Assignment', children=[
+            ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]),
+            expression_node
+        ], line=id_token[3], column=id_token[4])
+
 
 
     def assignment(self):
