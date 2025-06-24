@@ -5,8 +5,8 @@ from analyzer import lexical_analyzer, Parser
 class Compiler_GUI:
     def __init__(self, root):
         self.BG_COLOR = "#1B1D23"
-        self.TAB_BG = "#23272A" 
-        self.TEXT_BG = "#1E2124" 
+        self.TAB_BG = "#23272A"
+        self.TEXT_BG = "#1E2124"
         self.BORDER_COLOR = "#40444B"
         self.TEXT_COLOR = "#FFFFFF"
         self.FRAME_BG = "#474E68"
@@ -22,14 +22,14 @@ class Compiler_GUI:
         self.DARK_GRAY_SCROLL = "#1E1E1E"
         self.DARKER_GRAY_SCROLL = "#121212"
         self.BORDER_SCROLL = "#1E1E1E"
-        
+
         # aqui creo la ventana principal
         self.root = root
         self.root.title("Compiler Interface")
         self.root.configure(padx=0, pady=0, bg=self.BG_COLOR)
 
         self.last_tokens = None
-        
+
         self.fullscreen = True  # Estado inicial
         self.root.attributes('-fullscreen', True)
 
@@ -62,17 +62,13 @@ class Compiler_GUI:
         self.code_text_area.grid(row=0, column=1, sticky="nsew")  # determina la ubicacion del area y donde la deseamos
 
         # Scrollbar vertical
-        #scrollbar = tk.Scrollbar(text_frame, command=self.sync_scroll, bg=self.BORDER_TAB, troughcolor=self.ENTRY_BG, highlightbackground=self.ENTRY_BG, activebackground=self.ARROW_SCROLL)
         scrollbar = ttk.Scrollbar(text_frame, command=self.sync_scroll, style="Vertical.TScrollbar")
-
         scrollbar.grid(row=0, column=2, sticky="ns")
         self.code_text_area.config(yscrollcommand=scrollbar.set)
         self.line_numbers.config(yscrollcommand=scrollbar.set)
 
         # Scrollbar horizontal
-        #h_scrollbar = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=self.code_text_area.xview, bg=self.BORDER_TAB, troughcolor=self.ENTRY_BG, highlightbackground=self.ENTRY_BG, activebackground=self.ARROW_SCROLL)
         h_scrollbar = ttk.Scrollbar(text_frame, orient="horizontal", command=self.code_text_area.xview, style="Horizontal.TScrollbar")
-
         h_scrollbar.grid(row=1, column=0, columnspan=2, sticky="ew")
         self.code_text_area.config(xscrollcommand=h_scrollbar.set)
 
@@ -81,7 +77,7 @@ class Compiler_GUI:
         self.code_text_area.bind("<Button-4>", self.on_scroll)  # Para Linux
         self.code_text_area.bind("<Button-5>", self.on_scroll)  # Para Linux
 
-         # Configuración del grid para el frame de texto
+        # Configuración del grid para el frame de texto
         text_frame.grid_columnconfigure(1, weight=1)
         text_frame.grid_rowconfigure(0, weight=1)
 
@@ -141,7 +137,6 @@ class Compiler_GUI:
         self.top_tab.config(width=200)
         self.top_tab.grid_propagate(False)
 
-        
     def configure_styles(self):
         style = ttk.Style(self.root)
 
@@ -150,10 +145,10 @@ class Compiler_GUI:
         style.configure("Vertical.TScrollbar", background=self.DARK_GRAY_SCROLL, troughcolor=self.DARKER_GRAY_SCROLL, bordercolor=self.BORDER_SCROLL, arrowcolor=self.ARROW_SCROLL)
         style.configure("Horizontal.TScrollbar", background=self.DARK_GRAY_SCROLL, troughcolor=self.DARKER_GRAY_SCROLL, bordercolor=self.BORDER_SCROLL, arrowcolor=self.ARROW_SCROLL)
         #fondo de los notebooks
-        style.configure("TNotebook",background=self.FRAME_BG, borderwidth=0, relief="flat")    
+        style.configure("TNotebook",background=self.FRAME_BG, borderwidth=0, relief="flat")
         style.configure("TNotebook.Tab", background=self.LINE_NUM_BG, foreground=self.TEXT_COLOR, padding=(10,8), font=("Arial", 12, "bold"), borderwidth=1, relief="solid",
-                        highlighthickness=0, highlightbackground=self.BORDER_TAB, highlightcolor=self.BORDER_TAB)
-        style.map("TNotebook.Tab", background=[("selected", self.SELECTED_TAB)], foreground=[("selected", self.TEXT_COLOR)], bordercolor=[("selected","#50575D"),("!selected","#2E2E2E")], 
+                                 highlighthickness=0, highlightbackground=self.BORDER_TAB, highlightcolor=self.BORDER_TAB)
+        style.map("TNotebook.Tab", background=[("selected", self.SELECTED_TAB)], foreground=[("selected", self.TEXT_COLOR)], bordercolor=[("selected","#50575D"),("!selected","#2E2E2E")],
                   highlightcolor=[("selected","#2E2E2E"), ("!selected","#2E2E2E")])
         #fondo de los frames de las notebooks
         style.configure("TFrame", background=self.FRAME_BG)
@@ -161,8 +156,22 @@ class Compiler_GUI:
         style.configure("TLabel", background=self.FRAME_BG, foreground=self.TEXT_COLOR)
         style.configure("TButton", background=self.BUTTON_BG, foreground=self.BUTTON_FG, font=("Arial", 10, "bold"), padding=(5,5), borderwidth=1, relief="flat")
         style.map("TButton", background=[("active","#4850D4")])
-        style.configure("TEntry", background=self.ENTRY_BG, foreground=self.TEXT_COLOR, insertcolor=self.TEXT_COLOR, padding=(5,5), borderwidth=1) 
-
+        style.configure("TEntry", background=self.ENTRY_BG, foreground=self.TEXT_COLOR, insertcolor=self.TEXT_COLOR, padding=(5,5), borderwidth=1)
+        
+        # Estilo para Treeview
+        style.configure("Treeview",
+                        background=self.TEXT_BG,
+                        foreground=self.TEXT_COLOR,
+                        fieldbackground=self.TEXT_BG,
+                        bordercolor=self.BORDER_COLOR,
+                        rowheight=25)
+        style.map("Treeview",
+                  background=[('selected', self.SELECTED_TAB)],
+                  foreground=[('selected', self.TEXT_COLOR)])
+        style.configure("Treeview.Heading",
+                        background=self.STATUS_BAR_BG,
+                        foreground=self.TEXT_COLOR,
+                        font=("Consolas", 10, "bold"))
 
 
     def create_menu_bar(self):
@@ -183,7 +192,6 @@ class Compiler_GUI:
         file_menu.add_command(label="Save", command=self.save_file)
         file_menu.add_command(label="Save As", command=self.save_file_as)
         file_menu.add_separator()
-        #file_menu.add_command(label="Exit", command=self.root.quit)
         file_menu.add_command(label="Exit", command=self.close_file)
         menubar.add_cascade(label="File", menu=file_menu)
 
@@ -225,7 +233,6 @@ class Compiler_GUI:
         btn_save = tk.Button(icon_bar, image=self.save_icon, command=self.save_file, borderwidth=1, width=25, height=25)
         btn_saveas = tk.Button(icon_bar, image=self.saveas_icon, command=self.save_file_as, borderwidth=1, width=25, height=25)
         btn_exit = tk.Button(icon_bar, image=self.exit_icon, command=self.close_file, borderwidth=1, width=25, height=25)
-        #btn_exit = tk.Button(icon_bar, image=self.exit_icon, command=self.root.quit, borderwidth=1, width=25, height=25)
 
         # Posicionar botones en la barra de íconos
         btn_new.grid(row=0, column=0, padx=2, pady=2)
@@ -241,53 +248,44 @@ class Compiler_GUI:
         output.pack(expand=True, fill="both")
         return output
 
-
     def lexical_analysis(self):
         text_widget = self.code_text_area
         text = text_widget.get(1.0, tk.END)
 
-        # Ejecutar el análisis léxico
         tokens = lexical_analyzer(text)
 
-        # Eliminar etiquetas anteriores
         for tag in text_widget.tag_names():
             text_widget.tag_delete(tag)
 
         if not tokens:
             return
 
-        # Limpiar y preparar las dos áreas de salida
         output_valid = self.create_output_area(self.lexicon_tab)
         output_error = self.create_output_area(self.error_lexicon_tab)
 
-        # Listas para guardar líneas a escribir en archivos
         token_lines = []
         error_lines = []
 
-        # Mostrar tokens válidos y errores
         for idx, token in enumerate(tokens):
             if len(token) >= 5:
                 token_type, lexeme, color, line, column = token
                 start_index = f"{line}.{column - 1}"
                 end_index = f"{line}.{column - 1 + len(lexeme)}"
                 tag_name = f"token_{idx}"
-                
-                # Si es un comentario, solo resaltarlo en el editor y continuar
+
                 if token_type == 'comment':
-                    continue  # No lo añadimos a ninguna de las áreas de salida ni archivos
+                    continue
 
                 text_widget.tag_add(tag_name, start_index, end_index)
                 text_widget.tag_config(tag_name, foreground=color)
 
                 if token_type != 'invalid':
-                    # Token válido
                     output_tag = f"output_token_{idx}"
                     token_str = f"{lexeme} ({token_type}) (Line: {line}, Column: {column})\n"
                     output_valid.insert(tk.END, token_str, output_tag)
                     output_valid.tag_config(output_tag, foreground=color)
                     token_lines.append(token_str)
                 else:
-                    # Token inválido — se resalta en rojo también
                     tag_error = f"error_token_{idx}"
                     text_widget.tag_add(tag_error, start_index, end_index)
                     text_widget.tag_config(tag_error, foreground="#FF0000")
@@ -296,62 +294,127 @@ class Compiler_GUI:
                         error_str = f"Numerical error: '{lexeme}' it is not a valid real number (Line: {line}, Column: {column})\n"
                     else:
                         error_str = f"Error: '{lexeme}' not recognized (Line: {line}, Column: {column})\n"
-    
+
                     output_error.insert(tk.END, error_str, "error")
                     output_error.tag_config("error", foreground="#FF0000")
                     error_lines.append(error_str)
 
-        # Deshabilitar edición de áreas de salida
         output_valid.config(state=tk.DISABLED)
         output_error.config(state=tk.DISABLED)
 
-        # Guardar tokens y errores en archivos
         with open("tokens.txt", "w", encoding="utf-8") as token_file:
             token_file.writelines(token_lines)
 
         with open("errors.txt", "w", encoding="utf-8") as error_file:
             error_file.writelines(error_lines)
 
-        self.last_tokens = tokens  # Guardar tokens para reutilizar
+        self.last_tokens = tokens
         self.syntactic_analysis()
-    
+
+    def build_treeview_ast(self, treeview, parent_item, node):
+        """Recursivamente construye el Treeview a partir del AST."""
+        if node is None:
+            return
+
+        node_text = str(node) # Asume que tu clase AST_Node tiene un método __str__ descriptivo
+        item_id = treeview.insert(parent_item, "end", text=node_text, open=True)
+
+        # Aquí, necesitas acceder a los hijos de tu nodo AST.
+        # Esto dependerá de cómo está estructurada tu clase de nodos AST.
+        # Por ejemplo, si tienes una lista de hijos en cada nodo:
+        if hasattr(node, 'children') and isinstance(node.children, list):
+            for child in node.children:
+                self.build_treeview_ast(treeview, item_id, child)
+        # O si tienes atributos específicos para los hijos (e.g., 'left', 'right'):
+        elif hasattr(node, 'left') and node.left is not None:
+            self.build_treeview_ast(treeview, item_id, node.left)
+        elif hasattr(node, 'right') and node.right is not None:
+            self.build_treeview_ast(treeview, item_id, node.right)
+        # Agrega más casos según la estructura de tu AST
 
     def syntactic_analysis(self):
-        # Obtener el código fuente del área de texto
         text_widget = self.code_text_area
         source_code = text_widget.get(1.0, tk.END)
 
-        # Ejecutar análisis léxico
         tokens = self.last_tokens if self.last_tokens else lexical_analyzer(source_code)
 
-        # Ejecutar el análisis sintáctico
+        # Limpiar el contenido anterior de la pestaña sintáctica
+        for widget in self.syntactic_tab.winfo_children():
+            widget.destroy()
+
         parser = Parser(tokens)
         ast = parser.parse()
 
-        # Mostrar resultados en la pestaña superior "Syntactic"
-        output_syntax = self.create_output_area(self.syntactic_tab)
-        output_syntax.insert(tk.END, "Syntactic Tree:\n")
-        output_syntax.insert(tk.END, "AST will follow...\n")  # DEBUG
+        # Crear el Treeview para mostrar el AST
+        tree_frame = ttk.Frame(self.syntactic_tab, style="TFrame")
+        tree_frame.pack(expand=True, fill="both")
+
+        # Configurar el Treeview para que se expanda en el frame
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
+        # Usar grid para el Treeview dentro de tree_frame
+        tree = ttk.Treeview(tree_frame, show="tree", selectmode="browse", style="Treeview")
+        tree.grid(row=0, column=0, sticky="nsew")
+
+        # Configurar la columna principal del Treeview
+        # Esto es crucial para controlar el ancho.
+        # Puedes ajustar este valor si el texto sigue encimándose.
+        tree.column("#0", width=400, minwidth=200, anchor="w")
+        # El anchor="w" asegura que el texto se alinee a la izquierda.
+
+        # Scrollbar para el Treeview (ahora usando grid)
+        tree_scrollbar_y = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        tree_scrollbar_y.grid(row=0, column=1, sticky="ns")
+        tree.configure(yscrollcommand=tree_scrollbar_y.set)
+
+        tree_scrollbar_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview, style="Horizontal.TScrollbar")
+        tree_scrollbar_x.grid(row=1, column=0, sticky="ew")
+        tree.configure(xscrollcommand=tree_scrollbar_x.set)
+
+
         if ast is None:
-            output_syntax.insert(tk.END, "⚠️ No AST generated.\n")
+            tree.insert("", "end", text="⚠️ No AST generated or syntax errors present.")
         else:
-            output_syntax.insert(tk.END, str(ast))
+            self.build_treeview_ast(tree, "", ast) # Inicia la construcción desde la raíz
+
+        # Asegúrate de que el frame de errores también se limpie y actualice
+        output_error_syntax = self.create_output_area(self.error_syntactic_tab)
+        output_error_syntax.delete(1.0, tk.END) # Limpiar errores anteriores
+        output_error_syntax.insert(tk.END, "Syntactic errors:\n", "error")
+        output_error_syntax.tag_config("error", foreground="red")
 
         if parser.errors:
-            output_syntax.insert(tk.END, "\nSyntactic errors:\n", "error")
-            output_syntax.tag_config("error", foreground="red")
             for err in parser.errors:
-                output_syntax.insert(tk.END, f"{err}\n", "error")
+                output_error_syntax.insert(tk.END, f"{err}\n", "errors")
+        else:
+            output_error_syntax.insert(tk.END, "No syntactic errors found.\n", "success")
+            output_error_syntax.tag_config("success", foreground="green")
 
-            # Mostrar errores también en la pestaña inferior "Syntactic Error"
-            output_error_syntax = self.create_output_area(self.error_syntactic_tab)
-            output_error_syntax.insert(tk.END, "Syntactic errors:\n", "error")
-            output_error_syntax.tag_config("error", foreground="red")
-            for err in parser.errors:
-                output_error_syntax.insert(tk.END, f"{err}\n", "error")
-            output_error_syntax.config(state=tk.DISABLED)
+        output_error_syntax.config(state=tk.DISABLED)
 
-        output_syntax.config(state=tk.DISABLED)
+    def build_treeview_ast(self, treeview, parent_item, node):
+        """Recursively constructs the Treeview from the AST."""
+        if node is None:
+            return
+
+        node_text = str(node)
+
+        if node.type == 'Program':
+            node_text = f"Program (Line: {getattr(node, 'line', '?')}, Column: {getattr(node, 'column', '?')})"
+
+
+        item_id = treeview.insert(parent_item, "end", text=node_text, open=True)
+
+        if hasattr(node, 'children') and isinstance(node.children, list):
+            for child in node.children:
+                self.build_treeview_ast(treeview, item_id, child)
+        elif hasattr(node, 'declarations') and isinstance(node.declarations, list):
+            for decl in node.declarations:
+                self.build_treeview_ast(treeview, item_id, decl)
+        elif hasattr(node, 'statements') and isinstance(node.statements, list):
+            for stmt in node.statements:
+                self.build_treeview_ast(treeview, item_id, stmt)
 
 
     def semantic_analysis(self):
@@ -442,11 +505,9 @@ class Compiler_GUI:
         scroll_position = self.code_text_area.yview()
 
         self.line_numbers.delete(1.0, tk.END)
-        
-        # Obtener el número total de líneas, eliminando el salto de línea adicional de Tkinter
+
         lines = int(self.code_text_area.index('end-1c').split('.')[0])
 
-        # Insertar los números de línea correctamente
         line_numbers_string = "\n".join(str(i) for i in range(1, lines + 1))
         self.line_numbers.insert(tk.END, line_numbers_string)
 
@@ -457,7 +518,7 @@ class Compiler_GUI:
         """Sincroniza el scroll del área de texto con los números de línea."""
         if event.state & 0x1:
             return # Evita el desplazamiento horizontal con Shift + rueda del mouse
-        
+
         if event.delta:  # Windows y MacOS (rueda del mouse)
             move = -1 if event.delta > 0 else 1
         elif event.num == 4:  # Linux scroll up
@@ -477,7 +538,6 @@ class Compiler_GUI:
         self.line_numbers.yview(*args)
         self.update_line_numbers()
 
-
     #Configuracion pantalla completa
     def toggle_fullscreen(self, event=None):
         self.fullscreen = not self.fullscreen
@@ -491,3 +551,4 @@ class Compiler_GUI:
         """Escribe en el archivo y lo sobreescribe si ya existe"""
         with open(filename, "w", encoding="utf-8") as f:
             f.writelines(lines)
+
