@@ -47,77 +47,71 @@ PATTERNS = [
 ]
 
 # Analizador léxico que devuelve lista de tokens con tipo, lexema, línea y columna
+COMPILED_PATTERNS = [(token_type, re.compile(pattern)) for token_type, pattern in PATTERNS]
+
 def lexical_analyzer(source_code):
     tokens = []
     line = 1
     column = 1
     position = 0
-    in_multiline_comment = False
-    multiline_comment_start = (1, 1)  # posicion inicial del comentario
 
     while position < len(source_code):
-        if in_multiline_comment:
-            end_pos = source_code.find('*/', position)
-            if end_pos != -1:
-                comment_text = source_code[position:end_pos + 2]
-                tokens.append(('comment', comment_text, COLORS['comment'], multiline_comment_start[0], multiline_comment_start[1]))
-                newlines = comment_text.count('\n')
-                if newlines > 0:
-                    line += newlines
-                    column = len(comment_text.rsplit('\n', 1)[-1]) + 1
-                else:
-                    column += len(comment_text)
-                position = end_pos + 2
-                in_multiline_comment = False
-            else:
-                # Si no se encuentra el cierre, consideramos todo el resto como comentario
-                comment_text = source_code[position:]
-                tokens.append(('comment', comment_text, COLORS['comment'], multiline_comment_start[0], multiline_comment_start[1]))
-                return tokens  # ya no hay más texto
-        else:
-            if source_code[position:position+2] == '/*':
-                in_multiline_comment = True
-                multiline_comment_start = (line, column)
-                position += 2
-                column += 2
-                continue
-
-            match = None
-            for token_type, pattern in PATTERNS:
-                regex = re.compile(pattern)
-                match = regex.match(source_code, position)
-                if match:
-                    text = match.group(0)
-                    if token_type == 'whitespace':
-                        newlines = text.count('\n')
-                        if newlines > 0:
-                            line += newlines
-                            column = len(text.rsplit('\n', 1)[-1]) + 1
-                        else:
-                            column += len(text)
+        match = None
+        # Probamos cada patrón en la posición actual
+        for token_type, regex in COMPILED_PATTERNS:
+            match = regex.match(source_code, position)
+            if match:
+                text = match.group(0)
+                
+                # Caso especial para los saltos de línea y espacios
+                if token_type == 'whitespace':
+                    newlines = text.count('\n')
+                    if newlines > 0:
+                        line += newlines
+                        # La nueva columna es la longitud después del último \n
+                        column = len(text.rsplit('\n', 1)[-1]) + 1
                     else:
-                        if token_type == 'identifier' and text in KEYWORDS:
-                            real_type = 'keyword'
-                        elif token_type.startswith('invalid_real'):
-                            real_type = 'invalid'
-                        elif token_type in ['singleline_comment', 'multiline_comment']:
-                            real_type = 'comment'
-                        else:
-                            real_type = token_type
-                        color = COLORS.get(real_type, '#FFFFFF')
-                        tokens.append((real_type, text, color, line, column))
                         column += len(text)
+                    # No agregamos 'whitespace' a los tokens, solo actualizamos pos
                     position = match.end()
-                    break
-            if not match:
-                text = source_code[position]
-                tokens.append(('invalid', text, '#FF0000', line, column))
-                if text == '\n':
-                    line += 1
-                    column = 1
+                    break # Salimos del for y vamos a la siguiente iteración del while
+
+                # Para todos los demás tokens
+                real_type = token_type
+                if token_type == 'identifier' and text in KEYWORDS:
+                    real_type = 'keyword'
+                elif token_type.startswith('invalid_real'):
+                    real_type = 'invalid'
+                
+                # No agregamos comentarios a la lista de tokens para el parser,
+                # pero sí los procesamos para contar líneas correctamente.
+                if real_type in ['multiline_comment', 'singleline_comment', 'comment']:
+                    newlines = text.count('\n')
+                    if newlines > 0:
+                        line += newlines
+                        column = len(text.rsplit('\n', 1)[-1]) + 1
+                    else:
+                        column += len(text)
                 else:
-                    column += 1
-                position += 1
+                    # Agregamos el token válido a la lista
+                    color = COLORS.get(real_type, '#FFFFFF')
+                    tokens.append((real_type, text, color, line, column))
+                    # Actualizamos la columna después de añadir el token
+                    column += len(text)
+
+                position = match.end()
+                break # Salimos del for, patrón encontrado
+
+        # Si ningún patrón coincidió, es un carácter inválido
+        if not match:
+            text = source_code[position]
+            tokens.append(('invalid', text, '#FF0000', line, column))
+            if text == '\n':
+                line += 1
+                column = 1
+            else:
+                column += 1
+            position += 1
 
     return tokens
 
@@ -174,34 +168,51 @@ class Parser:
         return self.program()
 
     def program(self):
-        # Capture line/column from the 'main' token
+        # Primero, verificamos la secuencia 'int', 'main', '(', ')'
+        # Guardamos la posición actual por si necesitamos retroceder para el error
+        initial_pos = self.pos
+        
+        int_token = self.match('keyword', 'int')
         main_token = self.match('keyword', 'main')
-        if main_token:
-            self.match('symbol', '{')
+        lparen_token = self.match('symbol', '(')
+        rparen_token = self.match('symbol', ')')
+        
+        # Si la secuencia 'int main()' es correcta, procedemos
+        if int_token and main_token and lparen_token and rparen_token:
+            # Ahora buscamos la llave de apertura '{'
+            if not self.match('symbol', '{'):
+                # Si no hay '{', es un error.
+                self.errors.append(f"Syntax error: expected '{{' after '()' at line {rparen_token[3]}, column {rparen_token[4]+1}")
+                return ASTNode('Error', line=rparen_token[3], column=rparen_token[4]+1)
+            
             decls = self.declaration_list()
             
-            # The Program node itself should get its line/column from the 'main' token
+            # El nodo del programa usa la ubicación del token 'main'
             program_node = ASTNode('Program', line=main_token[3], column=main_token[4])
             if decls:
                 program_node.children.append(decls)
 
+            # Verificación de la llave de cierre '}'
             if not self.current_token():
-                self.errors.append("Expected '}' at end of program")
+                self.errors.append("Syntax error: expected '}' at end of program")
             elif self.current_token()[1] == '}':
                 self.match('symbol', '}')
             else:
-                # Use current token's line/column for error if available
                 token = self.current_token()
                 line = token[3] if token and len(token) > 3 else '?'
                 column = token[4] if token and len(token) > 4 else '?'
                 self.errors.append(f"Unexpected token '{token[1]}' before program end at line {line}, column {column}")
+            
             return program_node
+        
         else:
-            # If 'main' is not found, fallback to default line/column or first token
+            # Si la secuencia 'int main()' falló, volvemos a la posición inicial
+            self.pos = initial_pos
+            # Y generamos el error original que tenías
             first_token = self.current_token()
             line = first_token[3] if first_token and len(first_token) > 3 else '?'
             column = first_token[4] if first_token and len(first_token) > 4 else '?'
-            self.errors.append(f"Syntax error: program must start with 'main' at line {line}, column {column}")
+            self.errors.append(f"Syntax error: program must start with 'int main()' at line {line}, column {column}")
             return ASTNode('Error', line=line, column=column)
 
     def declaration_list(self):
@@ -351,17 +362,14 @@ class Parser:
 
         op_symbol = '+' if op_token[1] == '++' else '-'
 
-        # Capture the line/column from the identifier token
         inc_dec_line = id_token[3]
         inc_dec_column = id_token[4]
 
-        # Create the expression node: x + 1 or x - 1
         expression_node = ASTNode('AddExpression' if op_symbol == '+' else 'SubExpression', value=op_symbol, children=[
             ASTNode('Identifier', value=id_token[1], line=inc_dec_line, column=inc_dec_column),
             ASTNode('Number', value='1', line=inc_dec_line, column=inc_dec_column) # '1' is a constant, so use token's location
         ], line=inc_dec_line, column=inc_dec_column) # Line/column for the expression
 
-        # Complete assignment: x = x + 1
         return ASTNode('Assignment', children=[
             ASTNode('Identifier', value=id_token[1], line=inc_dec_line, column=inc_dec_column),
             expression_node
@@ -402,7 +410,7 @@ class Parser:
         while self.current_token() and self.current_token()[1] not in ('else', 'end'):
             stmt = self.statement()
             if stmt: then_branch.children.append(stmt)
-            else: # If statement parsing failed, advance to avoid infinite loop
+            else: 
                 if self.current_token(): self.pos += 1
                 else: break
         
@@ -413,12 +421,12 @@ class Parser:
             while self.current_token() and self.current_token()[1] != 'end':
                 stmt = self.statement()
                 if stmt: else_branch.children.append(stmt)
-                else: # If statement parsing failed, advance to avoid infinite loop
+                else: 
                     if self.current_token(): self.pos += 1
                     else: break
 
         end_token = self.match('keyword', 'end')
-        if not end_token: return ASTNode('Error') # Error handled by match
+        if not end_token: return ASTNode('Error') 
 
         children = [condition, then_branch]
         if else_branch: children.append(else_branch)
@@ -447,7 +455,7 @@ class Parser:
         while self.current_token() and self.current_token()[1] != 'until':
             stmt = self.statement()
             if stmt: body.children.append(stmt)
-            else: # If statement parsing failed, advance to avoid infinite loop
+            else: 
                 if self.current_token(): self.pos += 1
                 else: break
 
@@ -512,7 +520,7 @@ class Parser:
 
         while self.current_token() and self.current_token()[0] == 'logical_op':
             op_token = self.match('logical_op')
-            if not op_token: return ASTNode('Error') # Should not happen if current_token matched
+            if not op_token: return ASTNode('Error') 
 
             right = self.expression()
             if not right: return ASTNode('Error')
@@ -582,7 +590,6 @@ class Parser:
             self.errors.append("Unexpected end of input when parsing component")
             return ASTNode('Error')
 
-        # Capture line/column from the component's starting token
         component_line = token[3] if len(token) > 3 else None
         component_column = token[4] if len(token) > 4 else None
 
@@ -590,7 +597,6 @@ class Parser:
             self.match('symbol', '(')
             expr = self.logical_expression()
             self.match('symbol', ')')
-            # The line/column for the parenthesized expression will be taken from the expr itself
             return expr 
         elif token[0] in ('integer_number', 'real_number'):
             self.pos += 1
@@ -608,3 +614,125 @@ class Parser:
             self.errors.append(f"Invalid component starting with '{token[1]}' at line {component_line}, column {component_column}")
             self.pos += 1
             return ASTNode('Error', line=component_line, column=component_column)
+        
+class SymbolTable:
+    """
+    Una tabla de símbolos simple para un único ámbito (scope).
+    En un compilador más complejo, esto sería una pila de diccionarios para manejar ámbitos anidados.
+    """
+    def __init__(self):
+        self.symbols = {}
+
+    def define(self, name, symbol_type, line, column):
+        """Define un nuevo símbolo. Devuelve False si ya existe."""
+        if name in self.symbols:
+            return False
+        self.symbols[name] = {'type': symbol_type, 'line': line, 'column': column}
+        return True
+
+    def lookup(self, name):
+        """Busca un símbolo. Devuelve su información o None si no se encuentra."""
+        return self.symbols.get(name)
+
+class SemanticAnalyzer:
+    """
+    Recorre el AST para realizar el análisis semántico.
+    Utiliza un patrón 'Visitor' para procesar cada tipo de nodo.
+    """
+    def __init__(self, ast_root):
+        self.ast = ast_root
+        self.symbol_table = SymbolTable()
+        self.errors = []
+
+    def analyze(self):
+        """Inicia el análisis desde la raíz del AST."""
+        if self.ast and self.ast.type != 'Error':
+            self.visit(self.ast)
+
+    def visit(self, node):
+        """Método 'visit' genérico que delega al método específico del tipo de nodo."""
+        method_name = f'visit_{node.type}'
+        visitor = getattr(self, method_name, self.generic_visit)
+        return visitor(node)
+
+    def generic_visit(self, node):
+        """Visita todos los hijos de un nodo si no hay un método específico."""
+        for child in node.children:
+            self.visit(child)
+
+    def add_error(self, message, line, column):
+        """Añade un error semántico a la lista."""
+        self.errors.append(f"Semantic Error: {message} (Line: {line}, Column: {column})")
+
+    # --- Métodos Visitor para Nodos Específicos ---
+
+    def visit_Program(self, node):
+        # El programa es el ámbito principal, simplemente visitamos sus hijos.
+        self.generic_visit(node)
+
+    def visit_DeclarationList(self, node):
+        self.generic_visit(node)
+
+    def visit_VariableDeclaration(self, node):
+        var_type = node.children[0].value  # El primer hijo es el nodo 'Type'
+        identifier_list = node.children[1] # El segundo es 'IdentifierList'
+        
+        for identifier_node in identifier_list.children:
+            var_name = identifier_node.value
+            # Acción Semántica: Definir la variable
+            if not self.symbol_table.define(var_name, var_type, identifier_node.line, identifier_node.column):
+                # Error: Variable redeclarada
+                self.add_error(f"Variable '{var_name}' already declared.", identifier_node.line, identifier_node.column)
+
+    def visit_Assignment(self, node):
+        identifier_node = node.children[0]
+        expression_node = node.children[1]
+        var_name = identifier_node.value
+
+        # Acción Semántica: Verificar que la variable a la izquierda exista
+        symbol = self.symbol_table.lookup(var_name)
+        if not symbol:
+            # Error: Variable no declarada
+            self.add_error(f"Variable '{var_name}' is not declared.", identifier_node.line, identifier_node.column)
+            return
+
+        # Acción Semántica: Calcular tipo de la expresión y comparar
+        expected_type = symbol['type']
+        expression_type = self.visit(expression_node)
+
+        if expression_type and expression_type != expected_type:
+            # Manejo simple de tipos. int puede asignarse a float, pero no al revés sin casting.
+            if not (expected_type == 'float' and expression_type == 'int'):
+                 self.add_error(f"Type mismatch. Cannot assign type '{expression_type}' to variable '{var_name}' of type '{expected_type}'.",
+                                identifier_node.line, identifier_node.column)
+
+    def visit_Identifier(self, node):
+        var_name = node.value
+        # Acción Semántica: Verificar que la variable usada en una expresión exista
+        symbol = self.symbol_table.lookup(var_name)
+        if not symbol:
+            self.add_error(f"Variable '{var_name}' used before declaration.", node.line, node.column)
+            return 'error_type' # Devolver un tipo de error para detener la cascada
+        return symbol['type']
+
+    def visit_AddExpression(self, node):
+        left_type = self.visit(node.children[0])
+        right_type = self.visit(node.children[1])
+
+        # Regla de tipos para la suma:
+        if left_type in ('int', 'float') and right_type in ('int', 'float'):
+            return 'float' if 'float' in (left_type, right_type) else 'int'
+        else:
+            self.add_error(f"Unsupported operand types for '+': '{left_type}' and '{right_type}'.", node.line, node.column)
+            return 'error_type'
+
+    # --- Métodos para Nodos Terminales (devuelven su tipo) ---
+
+    def visit_Number(self, node):
+        return 'float' if '.' in node.value else 'int'
+
+    def visit_Boolean(self, node):
+        return 'bool'
+    
+
+#aqui van los demas tipos

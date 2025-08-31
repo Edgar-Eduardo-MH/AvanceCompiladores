@@ -1,6 +1,6 @@
 import tkinter as tk, os, sys
 from tkinter import messagebox, ttk, filedialog
-from analyzer import lexical_analyzer, Parser
+from analyzer import lexical_analyzer, Parser, SemanticAnalyzer 
 
 class Compiler_GUI:
     def __init__(self, root):
@@ -29,6 +29,8 @@ class Compiler_GUI:
         self.root.configure(padx=0, pady=0, bg=self.BG_COLOR)
 
         self.last_tokens = None
+        self.last_ast = None
+        self.syntax_errors = []
 
         self.fullscreen = True  # Estado inicial
         self.root.attributes('-fullscreen', True)
@@ -333,9 +335,6 @@ class Compiler_GUI:
         # Agrega más casos según la estructura de tu AST
 
     def syntactic_analysis(self):
-        text_widget = self.code_text_area
-        source_code = text_widget.get(1.0, tk.END)
-
         tokens = self.last_tokens if self.last_tokens else lexical_analyzer(source_code)
 
         # Limpiar el contenido anterior de la pestaña sintáctica
@@ -344,7 +343,9 @@ class Compiler_GUI:
 
         parser = Parser(tokens)
         ast = parser.parse()
-
+        self.last_ast = ast    
+        self.syntax_errors = parser.errors
+        
         # Crear el Treeview para mostrar el AST
         tree_frame = ttk.Frame(self.syntactic_tab, style="TFrame")
         tree_frame.pack(expand=True, fill="both")
@@ -358,7 +359,7 @@ class Compiler_GUI:
         tree.grid(row=0, column=0, sticky="nsew")
 
         # Configurar la columna principal del Treeview
-        # Esto es crucial para controlar el ancho.
+        # Controla el ancho.
         # Puedes ajustar este valor si el texto sigue encimándose.
         tree.column("#0", width=400, minwidth=200, anchor="w")
         # El anchor="w" asegura que el texto se alinee a la izquierda.
@@ -373,10 +374,10 @@ class Compiler_GUI:
         tree.configure(xscrollcommand=tree_scrollbar_x.set)
 
 
-        if ast is None:
-            tree.insert("", "end", text="⚠️ No AST generated or syntax errors present.")
-        else:
+        if ast and ast.type != 'Error':
             self.build_treeview_ast(tree, "", ast) # Inicia la construcción desde la raíz
+        else:
+            tree.insert("", "end", text="⚠️ No AST generated or syntax errors present.")
 
         # Asegúrate de que el frame de errores también se limpie y actualice
         output_error_syntax = self.create_output_area(self.error_syntactic_tab)
@@ -384,14 +385,15 @@ class Compiler_GUI:
         output_error_syntax.insert(tk.END, "Syntactic errors:\n", "error")
         output_error_syntax.tag_config("error", foreground="red")
 
-        if parser.errors:
-            for err in parser.errors:
+        if self.syntax_errors:              
+            for err in self.syntax_errors:
                 output_error_syntax.insert(tk.END, f"{err}\n", "errors")
         else:
             output_error_syntax.insert(tk.END, "No syntactic errors found.\n", "success")
             output_error_syntax.tag_config("success", foreground="green")
 
         output_error_syntax.config(state=tk.DISABLED)
+        self.semantic_analysis()
 
     def build_treeview_ast(self, treeview, parent_item, node):
         """Recursively constructs the Treeview from the AST."""
@@ -419,7 +421,51 @@ class Compiler_GUI:
 
     def semantic_analysis(self):
         # Llamar al analizador semántico
-        print("Análisis semántico ejecutado")
+        for widget in self.semantic_tab.winfo_children():
+            widget.destroy()
+        output_error_semantic = self.create_output_area(self.error_semantic_tab)
+        output_error_semantic.config(state=tk.NORMAL)
+        output_error_semantic.delete(1.0, tk.END)
+
+        # Solo ejecutar si el análisis sintáctico fue exitoso y se generó un AST
+        if self.last_ast and not self.syntax_errors:
+            analyzer = SemanticAnalyzer(self.last_ast)
+            analyzer.analyze()
+
+            # Mostrar errores semánticos
+            if analyzer.errors:
+                for err in analyzer.errors:
+                    output_error_semantic.insert(tk.END, f"{err}\n", "error")
+                output_error_semantic.tag_config("error", foreground="#FF6347") # Un rojo diferente
+            else:
+                output_error_semantic.insert(tk.END, "No semantic errors found.\n", "success")
+                output_error_semantic.tag_config("success", foreground="green")
+
+            # Mostrar la Tabla de Símbolos en la pestaña 'Semantic'
+            self.display_symbol_table(analyzer.symbol_table)
+        else:
+            output_error_semantic.insert(tk.END, "Cannot perform semantic analysis due to syntax errors or no AST.")
+
+        output_error_semantic.config(state=tk.DISABLED)
+
+    def display_symbol_table(self, symbol_table):
+        """Crea un Treeview para mostrar la tabla de símbolos."""
+        tree_frame = ttk.Frame(self.semantic_tab, style="TFrame")
+        tree_frame.pack(expand=True, fill="both")
+
+        tree = ttk.Treeview(tree_frame, columns=("Type", "Line", "Column"), show="headings", style="Treeview")
+        tree.heading("Type", text="Type")
+        tree.heading("Line", text="Line")
+        tree.heading("Column", text="Column")
+
+        # Añadir una columna para el nombre del símbolo (que es la principal)
+        tree.column("#0", width=150, anchor="w")
+        tree.heading("#0", text="Identifier")
+
+        for name, info in symbol_table.symbols.items():
+            tree.insert("", "end", text=name, values=(info['type'], info['line'], info['column']))
+
+        tree.pack(expand=True, fill="both")
 
     def generate_intermediate_code(self):
         # Generar código intermedio
