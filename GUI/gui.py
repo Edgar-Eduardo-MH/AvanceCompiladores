@@ -449,23 +449,55 @@ class Compiler_GUI:
         output_error_semantic.config(state=tk.DISABLED)
 
     def display_symbol_table(self, symbol_table):
-        """Crea un Treeview para mostrar la tabla de símbolos."""
+        """Crea un Treeview mejorado para mostrar la tabla de símbolos."""
+        # 1. Crear el frame contenedor (igual que antes)
         tree_frame = ttk.Frame(self.semantic_tab, style="TFrame")
         tree_frame.pack(expand=True, fill="both")
+        
+        # Configurar grid para que el Treeview y el scrollbar se expandan
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
 
-        tree = ttk.Treeview(tree_frame, columns=("Type", "Line", "Column"), show="headings", style="Treeview")
-        tree.heading("Type", text="Type")
-        tree.heading("Line", text="Line")
-        tree.heading("Column", text="Column")
+        # 2. Definir el Treeview con las NUEVAS columnas
+        columns = ('Name', 'Type', 'Value', 'Line', 'Column')
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Treeview")
+        tree.grid(row=0, column=0, sticky="nsew")
 
-        # Añadir una columna para el nombre del símbolo (que es la principal)
-        tree.column("#0", width=150, anchor="w")
-        tree.heading("#0", text="Identifier")
+        # 3. Configurar el ANCHO y TÍTULO de cada columna
+        tree.column("Name", anchor="w", width=80, minwidth=60)
+        tree.heading("Name", text="Variable", anchor="w")
 
-        for name, info in symbol_table.symbols.items():
-            tree.insert("", "end", text=name, values=(info['type'], info['line'], info['column']))
+        tree.column("Type", anchor="w", width=60, minwidth=50)
+        tree.heading("Type", text="Type", anchor="w")
 
-        tree.pack(expand=True, fill="both")
+        tree.column("Value", anchor="w", width=80, minwidth=60)
+        tree.heading("Value", text="Value", anchor="w")
+
+        tree.column("Line", anchor="center", width=50, minwidth=40)
+        tree.heading("Line", text="Line", anchor="center")
+
+        tree.column("Column", anchor="center", width=50, minwidth=40)
+        tree.heading("Column", text="Column", anchor="center")
+        
+        # Añadir un scrollbar vertical (importante si hay muchas variables)
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        tree.configure(yscrollcommand=scrollbar.set)
+
+        # 4. Llenar la tabla con los datos, incluyendo el nombre y valor
+        for name, data in symbol_table.symbols.items():
+            # Muestra 'undefined' si el valor es None para mayor claridad
+            value_to_display = data.get('value')
+            if value_to_display is None:
+                value_to_display = 'undefined'
+            
+            tree.insert("", "end", values=(
+                name,
+                data['type'],
+                value_to_display,
+                data['line'],
+                data['column']
+            ))
 
     def generate_intermediate_code(self):
         # Generar código intermedio

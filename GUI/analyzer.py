@@ -166,7 +166,7 @@ class Parser:
 
     def parse(self):
         ast = self.program()
-        self.clean_errors()
+        # self.clean_errors()
         return ast
 
     def program(self):
@@ -440,9 +440,9 @@ class Parser:
 
         condition = self.logical_expression()
         if not condition: return ASTNode('Error')
-
+        
+        if not self.match('keyword', 'then'): return ASTNode('Error')
         body = self.statement_list()
-        # if not body: return ASTNode('Error') # statement_list can return empty body
 
         end_token = self.match('keyword', 'end')
         if not end_token: return ASTNode('Error')
@@ -633,8 +633,15 @@ class SymbolTable:
         """Define un nuevo símbolo. Devuelve False si ya existe."""
         if name in self.symbols:
             return False
-        self.symbols[name] = {'type': symbol_type, 'line': line, 'column': column}
+        self.symbols[name] = {'type': symbol_type, 'value': None, 'line': line, 'column': column}
         return True
+    
+    def update_value(self, name, value):
+        """Actualiza el valor de un símbolo ya existente."""
+        if name in self.symbols:
+            self.symbols[name]['value'] = value
+            return True
+        return False
 
     def lookup(self, name):
         """Busca un símbolo. Devuelve su información o None si no se encuentra."""
@@ -654,9 +661,12 @@ class SemanticAnalyzer:
         """Inicia el análisis desde la raíz del AST."""
         if self.ast and self.ast.type != 'Error':
             self.visit(self.ast)
+        return self.errors
 
     def visit(self, node):
         """Método 'visit' genérico que delega al método específico del tipo de nodo."""
+        if not node or node.type == 'Error':
+            return 'error_type', None
         method_name = f'visit_{node.type}'
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
@@ -670,13 +680,16 @@ class SemanticAnalyzer:
         """Añade un error semántico a la lista."""
         self.errors.append(f"Semantic Error: {message} (Line: {line}, Column: {column})")
 
-    # --- Métodos Visitor para Nodos Específicos ---
+    #  Métodos Visitor para Nodos Específicos 
 
     def visit_Program(self, node):
         # El programa es el ámbito principal, simplemente visitamos sus hijos.
         self.generic_visit(node)
 
     def visit_DeclarationList(self, node):
+        self.generic_visit(node)
+
+    def visit_Declaration(self, node):
         self.generic_visit(node)
 
     def visit_VariableDeclaration(self, node):
@@ -700,17 +713,172 @@ class SemanticAnalyzer:
         if not symbol:
             # Error: Variable no declarada
             self.add_error(f"Variable '{var_name}' is not declared.", identifier_node.line, identifier_node.column)
+            self.visit(expression_node)  # Aún visitamos la expresión para capturar más errores
             return
 
         # Acción Semántica: Calcular tipo de la expresión y comparar
-        expected_type = symbol['type']
-        expression_type = self.visit(expression_node)
+        expression_type, expression_value = self.visit(expression_node)
 
-        if expression_type and expression_type != expected_type:
-            # Manejo simple de tipos. int puede asignarse a float, pero no al revés sin casting.
-            if not (expected_type == 'float' and expression_type == 'int'):
-                 self.add_error(f"Type mismatch. Cannot assign type '{expression_type}' to variable '{var_name}' of type '{expected_type}'.",
-                                identifier_node.line, identifier_node.column)
+        if expression_type == 'error_type':
+            return
+
+        expected_type = symbol['type']
+        if expression_type != expected_type and not (expected_type == 'float' and expression_type == 'int'):
+            self.add_error(f"Type mismatch. Cannot assign type '{expression_type}' to variable '{var_name}' of type '{expected_type}'.",
+                           identifier_node.line, identifier_node.column)
+        else:
+            self.symbol_table.update_value(var_name, expression_value)
+
+    def visit_IfStatement(self, node):
+        condition_node = node.children[0]
+        condition_type, _ = self.visit(condition_node)
+        
+        if condition_type != 'bool' and condition_type != 'error_type':
+            self.add_error(f"If statement condition must be boolean, but got '{condition_type}'.", 
+                        condition_node.line, condition_node.column)
+
+        self.visit(node.children[1]) 
+        if len(node.children) > 2:
+            self.visit(node.children[2]) 
+
+    def visit_WhileLoop(self, node):
+        condition_node = node.children[0]
+
+        # Extraemos solo el tipo de la tupla
+        condition_type, _ = self.visit(condition_node)
+
+        if condition_type != 'bool' and condition_type != 'error_type':
+            self.add_error(f"While loop condition must be boolean, but got '{condition_type}'.", 
+                        condition_node.line, condition_node.column)
+
+        self.visit(node.children[1]) # StatementList (cuerpo del bucle)
+
+    def visit_DoUntilLoop(self, node):
+        # Visita el cuerpo del bucle primero
+        self.visit(node.children[0]) # DoBlock
+
+        condition_node = node.children[1]
+        # Acción Semántica: La condición de un 'do-until' debe ser de tipo booleano.
+        condition_type = self.visit(condition_node)
+        if condition_type != 'bool' and condition_type != 'error_type':
+            self.add_error(f"Do-until loop condition must be boolean, but got '{condition_type}'.", 
+                           condition_node.line, condition_node.column)
+
+    def visit_Input(self, node):
+        identifier_node = node.children[0]
+        var_name = identifier_node.value
+
+        # Acción Semántica: Verificar que la variable donde se guarda la entrada exista.
+        if not self.symbol_table.lookup(var_name):
+            self.add_error(f"Variable '{var_name}' for input is not declared.", 
+                           identifier_node.line, identifier_node.column)
+        else:
+            self.symbol_table.update_value(var_name, '<input>')
+
+    def visit_Output(self, node):
+        # Simplemente visita cada expresión en la sentencia cout para verificarla.
+        self.generic_visit(node)
+
+
+    # --- Métodos Visitor para Expresiones ---
+
+    def visit_LogicalExpression(self, node):
+    # Obtenemos las tuplas completas de ambos lados
+        left_type, left_val = self.visit(node.children[0])
+        right_type, right_val = self.visit(node.children[1])
+
+        # Comparamos solo los tipos
+        if left_type == 'bool' and right_type == 'bool':
+            # Calculamos el nuevo valor si es posible
+            new_val = None
+            if left_val is not None and right_val is not None:
+                if node.value == '&&':
+                    new_val = left_val and right_val
+                elif node.value == '||':
+                    new_val = left_val or right_val
+            return 'bool', new_val # Devolvemos la tupla correcta
+        
+        if left_type != 'error_type' and right_type != 'error_type':
+            self.add_error(f"Unsupported operand types for '{node.value}': '{left_type}' and '{right_type}'. Both must be boolean.", 
+                        node.line, node.column)
+        
+        return 'error_type', None # Devolvemos la tupla de error
+
+    def visit_RelationalExpression(self, node):
+        left_type, left_val = self.visit(node.children[0])
+        right_type, right_val = self.visit(node.children[1])
+
+        if left_type not in ('int', 'float') or right_type not in ('int', 'float'):
+            self.add_error(f"Unsupported operand types for '{node.value}': '{left_type}' and '{right_type}'. Both must be numeric.", 
+                           node.line, node.column)
+            return 'error_type', None
+        
+        new_val = None
+        if left_val is not None and right_val is not None:
+            op_map = {'>': lambda a,b: a > b, '<': lambda a,b: a < b, '==': lambda a,b: a == b,
+                      '!=': lambda a,b: a != b, '>=': lambda a,b: a >= b, '<=': lambda a,b: a <= b}
+            new_val = op_map[node.value](left_val, right_val)
+
+        return 'bool', new_val
+
+    def visit_MulExpression(self, node):
+        left_type, left_val = self.visit(node.children[0])
+        right_type, right_val = self.visit(node.children[1])
+        op = node.value
+
+        if left_type not in ('int', 'float') or right_type not in ('int', 'float'):
+            # ... (manejo de error igual que antes)
+            return 'error_type', None
+
+        # Calcular el nuevo valor
+        new_val = None
+        if left_val is not None and right_val is not None:
+            if op == '*': new_val = left_val * right_val
+            elif op == '/': new_val = left_val / right_val if right_val != 0 else float('inf')
+            elif op == '%': 
+                if left_type == 'int' and right_type == 'int':
+                    new_val = left_val % right_val
+                else:
+                    self.add_error(f"Operator '%' requires integer operands.", node.line, node.column)
+                    return 'error_type', None
+
+        # Calcular el nuevo tipo
+        if op == '/': new_type = 'float'
+        elif op == '%': new_type = 'int'
+        else: new_type = 'float' if 'float' in (left_type, right_type) else 'int'
+
+        return new_type, new_val
+
+    def visit_PowExpression(self, node): # Para Potencia (^)
+        left_type = self.visit(node.children[0])
+        right_type = self.visit(node.children[1])
+
+        # Regla de tipos para la potencia:
+        if left_type in ('int', 'float') and right_type in ('int', 'float'):
+            return 'float' if 'float' in (left_type, right_type) else 'int'
+            
+        if left_type != 'error_type' and right_type != 'error_type':
+            self.add_error(f"Unsupported operand types for '^': '{left_type}' and '{right_type}'.", 
+                           node.line, node.column)
+        return 'error_type'
+
+    def visit_AddExpression(self, node): # Sirve para + y -
+        left_type, left_val = self.visit(node.children[0])
+        right_type, right_val = self.visit(node.children[1])
+
+        if left_type not in ('int', 'float') or right_type not in ('int', 'float'):
+            if 'error_type' not in (left_type, right_type):
+                self.add_error(f"Unsupported operand types for '{node.value}': '{left_type}' and '{right_type}'.", node.line, node.column)
+            return 'error_type', None
+
+        # Si alguno de los valores es desconocido, el resultado también lo es
+        if left_val is None or right_val is None:
+            new_val = None
+        else:
+            new_val = left_val + right_val if node.value == '+' else left_val - right_val
+        
+        new_type = 'float' if 'float' in (left_type, right_type) else 'int'
+        return new_type, new_val
 
     def visit_Identifier(self, node):
         var_name = node.value
@@ -719,26 +887,18 @@ class SemanticAnalyzer:
         if not symbol:
             self.add_error(f"Variable '{var_name}' used before declaration.", node.line, node.column)
             return 'error_type' # Devolver un tipo de error para detener la cascada
-        return symbol['type']
-
-    def visit_AddExpression(self, node):
-        left_type = self.visit(node.children[0])
-        right_type = self.visit(node.children[1])
-
-        # Regla de tipos para la suma:
-        if left_type in ('int', 'float') and right_type in ('int', 'float'):
-            return 'float' if 'float' in (left_type, right_type) else 'int'
-        else:
-            self.add_error(f"Unsupported operand types for '+': '{left_type}' and '{right_type}'.", node.line, node.column)
-            return 'error_type'
+        return symbol['type'], symbol['value']
 
     # --- Métodos para Nodos Terminales (devuelven su tipo) ---
 
     def visit_Number(self, node):
-        return 'float' if '.' in node.value else 'int'
+        if '.' in node.value:
+            return 'float', float(node.value)
+        else:
+            return 'int', int(node.value)
 
     def visit_Boolean(self, node):
-        return 'bool'
+        return 'bool', True if node.value == 'true' else False
     
-
-#aqui van los demas tipos
+    def visit_String(self, node):
+        return 'string', node.value
