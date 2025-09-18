@@ -377,7 +377,7 @@ class Compiler_GUI:
         if ast and ast.type != 'Error':
             self.build_treeview_ast(tree, "", ast) # Inicia la construcción desde la raíz
         else:
-            tree.insert("", "end", text="⚠️ No AST generated or syntax errors present.")
+            tree.insert("", "end", text="No AST generated or syntax errors present.")
 
         # Asegúrate de que el frame de errores también se limpie y actualice
         output_error_syntax = self.create_output_area(self.error_syntactic_tab)
@@ -450,7 +450,7 @@ class Compiler_GUI:
 
     def display_symbol_table(self, symbol_table):
         """Crea un Treeview mejorado para mostrar la tabla de símbolos."""
-        # 1. Crear el frame contenedor (igual que antes)
+        # Crear el frame contenedor (igual que antes)
         tree_frame = ttk.Frame(self.semantic_tab, style="TFrame")
         tree_frame.pack(expand=True, fill="both")
         
@@ -458,12 +458,12 @@ class Compiler_GUI:
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
 
-        # 2. Definir el Treeview con las NUEVAS columnas
+        # Definir el Treeview con las NUEVAS columnas
         columns = ('Name', 'Type', 'Value', 'Line', 'Column')
         tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Treeview")
         tree.grid(row=0, column=0, sticky="nsew")
 
-        # 3. Configurar el ANCHO y TÍTULO de cada columna
+        # Configurar el ANCHO y TÍTULO de cada columna
         tree.column("Name", anchor="w", width=80, minwidth=60)
         tree.heading("Name", text="Variable", anchor="w")
 
@@ -479,12 +479,12 @@ class Compiler_GUI:
         tree.column("Column", anchor="center", width=50, minwidth=40)
         tree.heading("Column", text="Column", anchor="center")
         
-        # Añadir un scrollbar vertical (importante si hay muchas variables)
+        # Añadir un scrollbar vertical importante si hay muchas variables
         scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scrollbar.grid(row=0, column=1, sticky="ns")
         tree.configure(yscrollcommand=scrollbar.set)
 
-        # 4. Llenar la tabla con los datos, incluyendo el nombre y valor
+        # Llenar la tabla con los datos, incluyendo el nombre y valor
         for name, data in symbol_table.symbols.items():
             # Muestra 'undefined' si el valor es None para mayor claridad
             value_to_display = data.get('value')

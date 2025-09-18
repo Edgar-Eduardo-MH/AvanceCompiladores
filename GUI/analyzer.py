@@ -219,7 +219,6 @@ class Parser:
 
     def declaration_list(self):
         children = []
-        # Get line/column from the first declaration if available
         initial_token = self.current_token()
         line, column = (initial_token[3], initial_token[4]) if initial_token and len(initial_token) > 3 else (None, None)
 
@@ -228,12 +227,10 @@ class Parser:
             if decl:
                 children.append(decl)
             else:
-                # If declaration fails, break to avoid infinite loop on bad input
                 if self.current_token():
-                    # Advance to next token to try and recover
                     self.pos += 1
                 else:
-                    break # Reached end of input
+                    break 
         return ASTNode('DeclarationList', children=children, line=line, column=column)
 
 
@@ -244,33 +241,26 @@ class Parser:
         else:
             stmt = self.statement()
             if stmt:
-                # The 'Declaration' node takes the line/column of its statement child
                 return ASTNode('Declaration', children=[stmt], line=stmt.line, column=stmt.column)
-            # If neither a variable declaration nor a statement, it's an error
             line = token[3] if token and len(token) > 3 else '?'
             column = token[4] if token and len(token) > 4 else '?'
             self.errors.append(f"Expected a declaration or statement, found '{token[1]}' at line {line}, column {column}")
             return ASTNode('Error', line=line, column=column)
 
     def variable_declaration(self):
-        # Get line/column from the type token
         type_token = self.match('keyword')
         if not type_token:
-            return ASTNode('Error') # Already added error in match
+            return ASTNode('Error') 
         
-        # Create Type node with its own line/column
         type_node = ASTNode('Type', value=type_token[1], line=type_token[3], column=type_token[4])
         
         id_list_node = self.identifier_list()
         if not id_list_node:
-            # Error already added by identifier_list
             return ASTNode('Error')
         
         if not self.match('symbol', ';'):
-            # Error already added by match
             return ASTNode('Error')
         
-        # VariableDeclaration node uses the line/column of its type token
         return ASTNode('VariableDeclaration', children=[type_node, id_list_node], 
                        line=type_token[3], column=type_token[4])
 
@@ -278,18 +268,17 @@ class Parser:
         children = []
         id_token = self.match('identifier')
         if not id_token:
-            return ASTNode('Error') # Error added by match
+            return ASTNode('Error') 
         children.append(ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]))
 
         while self.current_token() and self.current_token()[1] == ',':
-            self.match('symbol', ',') # Consume the comma
+            self.match('symbol', ',')
             id_token = self.match('identifier')
             if id_token:
                 children.append(ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]))
             else:
                 self.errors.append(f"Expected identifier after ',' at line {self.current_token()[3] if self.current_token() else '?'}, column {self.current_token()[4] if self.current_token() else '?'}")
                 return ASTNode('Error')
-        # IdentifierList node can take the line/column of its first identifier
         first_id_token = children[0] if children else None
         return ASTNode('IdentifierList', children=children, 
                        line=first_id_token.line if first_id_token else None, 
@@ -304,7 +293,7 @@ class Parser:
             stmt = self.statement()
             if stmt and stmt.type != 'Error':
                 children.append(stmt)
-            elif self.current_token(): # If statement didn't parse but there's a token, advance
+            elif self.current_token():
                 self.pos += 1
             else:
                 break
@@ -333,16 +322,15 @@ class Parser:
         elif token[1] == 'cout':
             return self.output_statement()
         elif token[0] == 'identifier':
-            # Check for assignment
             if len(self.tokens) > self.pos + 1 and self.tokens[self.pos + 1][1] == '=':
                 return self.assignment()
             else:
                 self.errors.append(f"Unexpected identifier '{token[1]}' at line {statement_line}, column {statement_column}. Expected assignment or inc/dec.")
-                self.pos += 1 # Advance to avoid infinite loop
+                self.pos += 1 #
                 return ASTNode('Error', line=statement_line, column=statement_column)
         else:
             self.errors.append(f"Unknown statement starting with '{token[1]}' at line {statement_line}, column {statement_column}")
-            self.pos += 1 # Advance to avoid infinite loop
+            self.pos += 1 
             return ASTNode('Error', line=statement_line, column=statement_column)
         
     def lookahead_inc_dec(self):
@@ -369,31 +357,30 @@ class Parser:
 
         expression_node = ASTNode('AddExpression' if op_symbol == '+' else 'SubExpression', value=op_symbol, children=[
             ASTNode('Identifier', value=id_token[1], line=inc_dec_line, column=inc_dec_column),
-            ASTNode('Number', value='1', line=inc_dec_line, column=inc_dec_column) # '1' is a constant, so use token's location
-        ], line=inc_dec_line, column=inc_dec_column) # Line/column for the expression
+            ASTNode('Number', value='1', line=inc_dec_line, column=inc_dec_column) 
+        ], line=inc_dec_line, column=inc_dec_column)
 
         return ASTNode('Assignment', children=[
             ASTNode('Identifier', value=id_token[1], line=inc_dec_line, column=inc_dec_column),
             expression_node
-        ], line=inc_dec_line, column=inc_dec_column) # Line/column for the assignment
+        ], line=inc_dec_line, column=inc_dec_column) 
 
     def assignment(self):
         id_token = self.match('identifier')
         if not id_token:
-            return ASTNode('Error') # Error handled by match
+            return ASTNode('Error')
 
         assignment_op_token = self.match('assignment')
         if not assignment_op_token:
-            return ASTNode('Error') # Error handled by match
+            return ASTNode('Error')
 
         expr = self.logical_expression()
-        if not expr: # expr could be None if there's a syntax error in the expression
+        if not expr: 
             return ASTNode('Error')
             
         if not self.match('symbol', ';'):
-            return ASTNode('Error') # Error handled by match
+            return ASTNode('Error') 
 
-        # Assignment node uses the line/column of its identifier token
         return ASTNode('Assignment', children=[
             ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]),
             expr
@@ -889,7 +876,7 @@ class SemanticAnalyzer:
             return 'error_type' # Devolver un tipo de error para detener la cascada
         return symbol['type'], symbol['value']
 
-    # --- Métodos para Nodos Terminales (devuelven su tipo) ---
+    # Métodos para Nodos Terminales que devuelven su tipo
 
     def visit_Number(self, node):
         if '.' in node.value:
