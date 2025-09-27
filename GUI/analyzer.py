@@ -141,7 +141,7 @@ class ASTNode:
 
 class Parser:
     def __init__(self, tokens):
-        self.tokens = tokens
+        self.tokens = [t for t in tokens if t[0] not in ('multiline_comment', 'singleline_comment')]
         self.pos = 0
         self.errors = []
 
@@ -166,7 +166,6 @@ class Parser:
 
     def parse(self):
         ast = self.program()
-        # self.clean_errors()
         return ast
 
     def program(self):
@@ -187,102 +186,91 @@ class Parser:
                 self.errors.append(f"Syntax error: expected '{{' after '()' at line {rparen_token[3]}, column {rparen_token[4]+1}")
                 return ASTNode('Error', line=rparen_token[3], column=rparen_token[4]+1)
             
-            decls = self.declaration_list()
+            declarations = self.declaration_list()
+            statements = self.statement_list()
             
             # El nodo del programa usa la ubicación del token 'main'
-            program_node = ASTNode('Program', line=main_token[3], column=main_token[4])
-            if decls:
-                program_node.children.append(decls)
+            program_node = ASTNode('Program', children=[declarations, statements], line=main_token[3], column=main_token[4])
 
             # Verificación de la llave de cierre '}'
-            if not self.current_token():
-                self.errors.append("Syntax error: expected '}' at end of program")
-            elif self.current_token()[1] == '}':
-                self.match('symbol', '}')
-            else:
-                token = self.current_token()
-                line = token[3] if token and len(token) > 3 else '?'
-                column = token[4] if token and len(token) > 4 else '?'
-                self.errors.append(f"Unexpected token '{token[1]}' before program end at line {line}, column {column}")
+            if not self.match('symbol', '}'):
+                self.errors.append("Syntax Error: Expected '}' at the end of the program.")
             
             return program_node
         
         else:
-            # Si la secuencia 'int main()' falló, volvemos a la posición inicial
             self.pos = initial_pos
-            # Y generamos el error original que tenías
             first_token = self.current_token()
-            line = first_token[3] if first_token and len(first_token) > 3 else '?'
-            column = first_token[4] if first_token and len(first_token) > 4 else '?'
-            self.errors.append(f"Syntax error: program must start with 'int main()' at line {line}, column {column}")
+            line = first_token[3] if first_token and len(first_token) > 3 else '1'
+            column = first_token[4] if first_token and len(first_token) > 4 else '1'
+            self.errors.append(f"Syntax Error: Program must start with 'int main()' at line {line}, column {column}.")
             return ASTNode('Error', line=line, column=column)
 
     def declaration_list(self):
-        children = []
+        declarations = []
         initial_token = self.current_token()
-        line, column = (initial_token[3], initial_token[4]) if initial_token and len(initial_token) > 3 else (None, None)
 
-        while self.current_token() and self.current_token()[1] != '}':
-            decl = self.declaration()
-            if decl:
-                children.append(decl)
+        while self.current_token() and self.current_token()[0] == 'keyword' and self.current_token()[1] in ('int', 'float', 'bool', 'string', 'char'):
+            decl = self.variable_declaration()
+            if decl and decl.type != 'Error':
+                declarations.append(decl)
             else:
-                if self.current_token():
-                    self.pos += 1
-                else:
-                    break 
-        return ASTNode('DeclarationList', children=children, line=line, column=column)
+                break
 
+        line = initial_token[3] if initial_token and len(initial_token) > 3 else None
+        column = initial_token[4] if initial_token and len(initial_token) > 4 else None
+        
+        return ASTNode('DeclarationList', children=declarations, line=line, column=column)
 
-    def declaration(self):
-        token = self.current_token()
-        if token and token[0] == 'keyword' and token[1] in ('int', 'float', 'bool'):
-            return self.variable_declaration()
-        else:
-            stmt = self.statement()
-            if stmt:
-                return ASTNode('Declaration', children=[stmt], line=stmt.line, column=stmt.column)
-            line = token[3] if token and len(token) > 3 else '?'
-            column = token[4] if token and len(token) > 4 else '?'
-            self.errors.append(f"Expected a declaration or statement, found '{token[1]}' at line {line}, column {column}")
-            return ASTNode('Error', line=line, column=column)
 
     def variable_declaration(self):
         type_token = self.match('keyword')
         if not type_token:
-            return ASTNode('Error') 
-        
+            return None
+
         type_node = ASTNode('Type', value=type_token[1], line=type_token[3], column=type_token[4])
         
-        id_list_node = self.identifier_list()
-        if not id_list_node:
-            return ASTNode('Error')
-        
+        initializers = self.initializer_list()
+
         if not self.match('symbol', ';'):
             return ASTNode('Error')
-        
-        return ASTNode('VariableDeclaration', children=[type_node, id_list_node], 
-                       line=type_token[3], column=type_token[4])
 
-    def identifier_list(self):
-        children = []
-        id_token = self.match('identifier')
-        if not id_token:
-            return ASTNode('Error') 
-        children.append(ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]))
+        return ASTNode('VariableDeclaration', children=[type_node] + initializers, line=type_token[3], column=type_token[4])
+
+    def initializer_list(self):
+        initializers = []
+        
+        init = self.initializer()
+        if init:
+            initializers.append(init)
 
         while self.current_token() and self.current_token()[1] == ',':
             self.match('symbol', ',')
-            id_token = self.match('identifier')
-            if id_token:
-                children.append(ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]))
+            init = self.initializer()
+            if init:
+                initializers.append(init)
             else:
-                self.errors.append(f"Expected identifier after ',' at line {self.current_token()[3] if self.current_token() else '?'}, column {self.current_token()[4] if self.current_token() else '?'}")
+                self.errors.append("Syntax Error: Expected identifier after ','.")
+                return [ASTNode('Error')]
+
+        return initializers
+    
+    def initializer(self):
+        id_token = self.match('identifier')
+        if not id_token:
+            return None
+
+        identifier_node = ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4])
+        
+        if self.current_token() and self.current_token()[0] == 'assignment':
+            self.match('assignment')
+            expr_node = self.logical_expression()
+            if not expr_node or expr_node.type == 'Error':
+                self.errors.append(f"Syntax Error: Invalid expression for variable '{id_token[1]}' initialization.")
                 return ASTNode('Error')
-        first_id_token = children[0] if children else None
-        return ASTNode('IdentifierList', children=children, 
-                       line=first_id_token.line if first_id_token else None, 
-                       column=first_id_token.column if first_id_token else None)
+            return ASTNode('Assignment', children=[identifier_node, expr_node], line=id_token[3], column=id_token[4])
+        
+        return identifier_node
 
     def statement_list(self):
         children = []
@@ -615,12 +603,15 @@ class SymbolTable:
     """
     def __init__(self):
         self.symbols = {}
+        self.memory_address_counter = 0
 
-    def define(self, name, symbol_type, line, column):
+    def define(self, name, symbol_type, line, column, scope='global'):
         """Define un nuevo símbolo. Devuelve False si ya existe."""
         if name in self.symbols:
             return False
-        self.symbols[name] = {'type': symbol_type, 'value': None, 'line': line, 'column': column}
+        address = self.memory_address_counter
+        self.memory_address_counter += 4
+        self.symbols[name] = {'type': symbol_type, 'value': None, 'scope': scope, 'line': line, 'column': column, 'memory_address': address}
         return True
     
     def update_value(self, name, value):
@@ -643,6 +634,7 @@ class SemanticAnalyzer:
         self.ast = ast_root
         self.symbol_table = SymbolTable()
         self.errors = []
+        self.log = []
 
     def analyze(self):
         """Inicia el análisis desde la raíz del AST."""
@@ -669,51 +661,76 @@ class SemanticAnalyzer:
 
     #  Métodos Visitor para Nodos Específicos 
 
-    def visit_Program(self, node):
-        # El programa es el ámbito principal, simplemente visitamos sus hijos.
-        self.generic_visit(node)
-
-    def visit_DeclarationList(self, node):
-        self.generic_visit(node)
-
-    def visit_Declaration(self, node):
-        self.generic_visit(node)
-
     def visit_VariableDeclaration(self, node):
-        var_type = node.children[0].value  # El primer hijo es el nodo 'Type'
-        identifier_list = node.children[1] # El segundo es 'IdentifierList'
+        var_type_node = node.children[0]
+        var_type = var_type_node.value
         
-        for identifier_node in identifier_list.children:
-            var_name = identifier_node.value
-            # Acción Semántica: Definir la variable
-            if not self.symbol_table.define(var_name, var_type, identifier_node.line, identifier_node.column):
-                # Error: Variable redeclarada
-                self.add_error(f"Variable '{var_name}' already declared.", identifier_node.line, identifier_node.column)
+        for initializer_node in node.children[1:]:
+            if initializer_node.type == 'Assignment':
+                identifier_node = initializer_node.children[0]
+                expression_node = initializer_node.children[1]
+                var_name = identifier_node.value
+
+                self.log.append(f"Regla: Declaración de variable '{var_name}' de tipo '{var_type}'.")
+
+                if not self.symbol_table.define(var_name, var_type, identifier_node.line, identifier_node.column):
+                    self.add_error(f"Variable '{var_name}' is already declared.", identifier_node.line, identifier_node.column)
+                else:
+                    self.log.append(f"Acción: Símbolo '{var_name}' añadido a la tabla.")
+
+                expr_type, expr_value = self.visit(expression_node)
+
+                self.log.append(f"Regla: Verificando asignación en declaración para '{var_name}'.")
+                self.log.append(f"  -> Tipo esperado: '{var_type}', Tipo obtenido: '{expr_type}'.")
+                
+                if expr_type == 'error_type':
+                    continue
+
+                if expr_type != var_type and not (var_type == 'float' and expr_type == 'int'):
+                    self.add_error(f"Type mismatch. Cannot assign '{expr_type}' to variable '{var_name}' of type '{var_type}'.",
+                                   identifier_node.line, identifier_node.column)
+                else:
+                    self.log.append(f"  -> Resultado: Tipos compatibles. Valor actualizado a {expr_value}.")
+                    self.symbol_table.update_value(var_name, expr_value)
+
+            elif initializer_node.type == 'Identifier':
+                var_name = initializer_node.value
+                self.log.append(f"Regla: Declaración de variable '{var_name}' de tipo '{var_type}'.")
+                if not self.symbol_table.define(var_name, var_type, initializer_node.line, initializer_node.column):
+                    self.add_error(f"Variable '{var_name}' is already declared.", initializer_node.line, initializer_node.column)
+                    self.log.append(f"Acción: Símbolo '{var_name}' añadido a la tabla.")
 
     def visit_Assignment(self, node):
         identifier_node = node.children[0]
         expression_node = node.children[1]
         var_name = identifier_node.value
 
+        self.log.append(f"\nRegla: Analizando asignación para la variable '{var_name}'.")
+
         # Acción Semántica: Verificar que la variable a la izquierda exista
         symbol = self.symbol_table.lookup(var_name)
         if not symbol:
-            # Error: Variable no declarada
+            self.log.append(f"  -> ¡ERROR! La variable '{var_name}' no ha sido declarada.")
             self.add_error(f"Variable '{var_name}' is not declared.", identifier_node.line, identifier_node.column)
-            self.visit(expression_node)  # Aún visitamos la expresión para capturar más errores
+            self.visit(expression_node)  
             return
 
         # Acción Semántica: Calcular tipo de la expresión y comparar
+        self.log.append(f"  -> Símbolo '{var_name}' encontrado en la tabla.")
         expression_type, expression_value = self.visit(expression_node)
 
         if expression_type == 'error_type':
             return
 
         expected_type = symbol['type']
+        self.log.append(f"Regla: Verificando tipos para asignación.")
+        self.log.append(f"  -> Tipo esperado ('{var_name}'): '{expected_type}', Tipo obtenido (expresión): '{expression_type}'.")
         if expression_type != expected_type and not (expected_type == 'float' and expression_type == 'int'):
+            self.log.append(f"  -> ¡ERROR DE TIPOS! No se puede asignar '{expression_type}' a '{expected_type}'.")
             self.add_error(f"Type mismatch. Cannot assign type '{expression_type}' to variable '{var_name}' of type '{expected_type}'.",
                            identifier_node.line, identifier_node.column)
         else:
+            self.log.append(f"  -> Resultado: Tipos compatibles. Valor de '{var_name}' actualizado a {expression_value}.")
             self.symbol_table.update_value(var_name, expression_value)
 
     def visit_IfStatement(self, node):
@@ -850,10 +867,13 @@ class SemanticAnalyzer:
         return 'error_type'
 
     def visit_AddExpression(self, node): # Sirve para + y -
+        self.log.append(f"Regla: Analizando expresión de suma/resta ('{node.value}').")
         left_type, left_val = self.visit(node.children[0])
         right_type, right_val = self.visit(node.children[1])
+        self.log.append(f"  -> Operando izquierdo tipo: '{left_type}', Operando derecho tipo: '{right_type}'.")
 
         if left_type not in ('int', 'float') or right_type not in ('int', 'float'):
+            self.log.append(f"  -> ¡ERROR DE TIPOS! Los operandos para '{node.value}' deben ser numéricos.")
             if 'error_type' not in (left_type, right_type):
                 self.add_error(f"Unsupported operand types for '{node.value}': '{left_type}' and '{right_type}'.", node.line, node.column)
             return 'error_type', None
@@ -865,6 +885,7 @@ class SemanticAnalyzer:
             new_val = left_val + right_val if node.value == '+' else left_val - right_val
         
         new_type = 'float' if 'float' in (left_type, right_type) else 'int'
+        self.log.append(f"  -> Resultado: Operación válida. Tipo resultante: '{new_type}'.")
         return new_type, new_val
 
     def visit_Identifier(self, node):

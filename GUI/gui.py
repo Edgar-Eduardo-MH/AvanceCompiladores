@@ -443,15 +443,31 @@ class Compiler_GUI:
 
             # Mostrar la Tabla de Símbolos en la pestaña 'Semantic'
             self.display_symbol_table(analyzer.symbol_table)
+            self.display_semantic_log(analyzer.log)
         else:
             output_error_semantic.insert(tk.END, "Cannot perform semantic analysis due to syntax errors or no AST.")
 
         output_error_semantic.config(state=tk.DISABLED)
 
+    def display_semantic_log(self, log_messages):
+        """Muestra el registro de análisis semántico en su pestaña."""
+        for widget in self.semantic_tab.winfo_children():
+            widget.destroy()
+        
+        log_text = tk.Text(self.semantic_tab, wrap="word", bg=self.TEXT_BG, fg=self.TEXT_COLOR, font=("Consolas", 11))
+        log_text.pack(expand=True, fill="both", padx=5, pady=5)
+
+        for message in log_messages:
+            log_text.insert(tk.END, message + "\n")
+        
+        log_text.config(state=tk.DISABLED)
+
     def display_symbol_table(self, symbol_table):
         """Crea un Treeview mejorado para mostrar la tabla de símbolos."""
-        # Crear el frame contenedor (igual que antes)
-        tree_frame = ttk.Frame(self.semantic_tab, style="TFrame")
+        for widget in self.hash_tab.winfo_children():
+            widget.destroy()
+        # Crear el frame contenedor
+        tree_frame = ttk.Frame(self.hash_tab, style="TFrame")
         tree_frame.pack(expand=True, fill="both")
         
         # Configurar grid para que el Treeview y el scrollbar se expandan
@@ -459,7 +475,7 @@ class Compiler_GUI:
         tree_frame.grid_columnconfigure(0, weight=1)
 
         # Definir el Treeview con las NUEVAS columnas
-        columns = ('Name', 'Type', 'Value', 'Line', 'Column')
+        columns = ('Name', 'Type', 'Value', 'Scope', 'Address', 'Line', 'Column')
         tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Treeview")
         tree.grid(row=0, column=0, sticky="nsew")
 
@@ -468,17 +484,23 @@ class Compiler_GUI:
         tree.heading("Name", text="Variable", anchor="w")
 
         tree.column("Type", anchor="w", width=60, minwidth=50)
-        tree.heading("Type", text="Type", anchor="w")
+        tree.heading("Type", text="Tipo", anchor="w")
 
         tree.column("Value", anchor="w", width=80, minwidth=60)
-        tree.heading("Value", text="Value", anchor="w")
+        tree.heading("Value", text="Valor", anchor="w")
+
+        tree.column("Scope", anchor="w", width=80)
+        tree.heading("Scope", text="Ambito", anchor="w")
+
+        tree.column("Address", anchor="center", width=80)
+        tree.heading("Address", text="Dirección", anchor="center")
 
         tree.column("Line", anchor="center", width=50, minwidth=40)
-        tree.heading("Line", text="Line", anchor="center")
+        tree.heading("Line", text="Línea", anchor="center")
 
         tree.column("Column", anchor="center", width=50, minwidth=40)
-        tree.heading("Column", text="Column", anchor="center")
-        
+        tree.heading("Column", text="Columna", anchor="center")
+
         # Añadir un scrollbar vertical importante si hay muchas variables
         scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scrollbar.grid(row=0, column=1, sticky="ns")
@@ -495,6 +517,8 @@ class Compiler_GUI:
                 name,
                 data['type'],
                 value_to_display,
+                data['scope'],
+                data['memory_address'],
                 data['line'],
                 data['column']
             ))
