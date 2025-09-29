@@ -16,7 +16,7 @@ COLORS = {
 KEYWORDS = {
     'if', 'else', 'do', 'while', 'switch', 'case', 'int', 'end', 'float', 'main', 'until',
     'for', 'foreach', 'double', 'char', 'string', 'break', 'continue', 'return', 'then',
-    'cin', 'cout', 'true', 'false'
+    'cin', 'cout', 'true', 'false', 'bool'
 }
 
 DATA_TYPES = {'int', 'float', 'bool', 'string', 'char', 'double'}
