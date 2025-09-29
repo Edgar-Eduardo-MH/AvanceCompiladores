@@ -374,7 +374,7 @@ class SymbolTable:
         self.persistent_symbols[address] = symbol_data
         return True
     
-    # --- CAMBIO CLAVE: Se actualiza el valor en ambos registros ---
+    
     def update_value(self, name, value):
         """Actualiza el valor de un símbolo en el ámbito activo Y en el registro persistente."""
         for scope in reversed(self.scope_stack):
