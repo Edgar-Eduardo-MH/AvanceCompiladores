@@ -420,107 +420,106 @@ class Compiler_GUI:
 
 
     def semantic_analysis(self):
-        # Llamar al analizador semántico
+        # Limpiar pestañas anteriores
         for widget in self.semantic_tab.winfo_children():
             widget.destroy()
         output_error_semantic = self.create_output_area(self.error_semantic_tab)
         output_error_semantic.config(state=tk.NORMAL)
         output_error_semantic.delete(1.0, tk.END)
 
-        # Solo ejecutar si el análisis sintáctico fue exitoso y se generó un AST
         if self.last_ast and not self.syntax_errors:
             analyzer = SemanticAnalyzer(self.last_ast)
             analyzer.analyze()
 
-            # Mostrar errores semánticos
+            # Mostrar errores semánticos (esto no cambia)
             if analyzer.errors:
                 for err in analyzer.errors:
                     output_error_semantic.insert(tk.END, f"{err}\n", "error")
-                output_error_semantic.tag_config("error", foreground="#FF6347") # Un rojo diferente
+                output_error_semantic.tag_config("error", foreground="#FF6347")
             else:
                 output_error_semantic.insert(tk.END, "No semantic errors found.\n", "success")
                 output_error_semantic.tag_config("success", foreground="green")
 
-            # Mostrar la Tabla de Símbolos en la pestaña 'Semantic'
             self.display_symbol_table(analyzer.symbol_table)
-            self.display_semantic_log(analyzer.log)
+            self.display_semantic_tree(analyzer.symbol_table) 
         else:
             output_error_semantic.insert(tk.END, "Cannot perform semantic analysis due to syntax errors or no AST.")
 
         output_error_semantic.config(state=tk.DISABLED)
 
-    def display_semantic_log(self, log_messages):
-        """Muestra el registro de análisis semántico en su pestaña."""
+    def display_semantic_tree(self, symbol_table):
+        """Muestra la información semántica de los símbolos como un árbol en la pestaña 'Semantic'."""
         for widget in self.semantic_tab.winfo_children():
             widget.destroy()
-        
-        log_text = tk.Text(self.semantic_tab, wrap="word", bg=self.TEXT_BG, fg=self.TEXT_COLOR, font=("Consolas", 11))
-        log_text.pack(expand=True, fill="both", padx=5, pady=5)
 
-        for message in log_messages:
-            log_text.insert(tk.END, message + "\n")
-        
-        log_text.config(state=tk.DISABLED)
-
-    def display_symbol_table(self, symbol_table):
-        """Crea un Treeview mejorado para mostrar la tabla de símbolos."""
-        for widget in self.hash_tab.winfo_children():
-            widget.destroy()
-        # Crear el frame contenedor
-        tree_frame = ttk.Frame(self.hash_tab, style="TFrame")
+        tree_frame = ttk.Frame(self.semantic_tab, style="TFrame")
         tree_frame.pack(expand=True, fill="both")
-        
-        # Configurar grid para que el Treeview y el scrollbar se expandan
         tree_frame.grid_rowconfigure(0, weight=1)
         tree_frame.grid_columnconfigure(0, weight=1)
 
-        # Definir el Treeview con las NUEVAS columnas
+        tree = ttk.Treeview(tree_frame, show="tree", style="Treeview")
+        tree.grid(row=0, column=0, sticky="nsew")
+        
+        tree_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        tree_scrollbar.grid(row=0, column=1, sticky="ns")
+        tree.configure(yscrollcommand=tree_scrollbar.set)
+        
+        # --- CAMBIO CLAVE: Usar la nueva función ---
+        all_symbols = symbol_table.get_historical_symbols()
+
+        if not all_symbols:
+            tree.insert("", "end", text="No symbols defined.", open=True)
+            return
+
+        for address, data in all_symbols.items():
+            name = data["name"] # Obtenemos el nombre desde los datos
+            parent_node = tree.insert("", "end", text=f'"{name}" (Línea: {data["line"]})', open=True)
+            
+            tree.insert(parent_node, "end", text=f"Tipo: {data['type']}")
+            tree.insert(parent_node, "end", text=f"Ámbito: {data['scope']}")
+            tree.insert(parent_node, "end", text=f"Dirección de Memoria: {data['memory_address']}")
+            
+            value_to_display = data.get('value', 'undefined')
+            if value_to_display is None:
+                value_to_display = 'undefined'
+            tree.insert(parent_node, "end", text=f"Valor: {value_to_display}")
+
+    def display_symbol_table(self, symbol_table):
+        """Crea un Treeview mejorado para mostrar la tabla de símbolos en la pestaña HASH."""
+        for widget in self.hash_tab.winfo_children():
+            widget.destroy()
+        
+        tree_frame = ttk.Frame(self.hash_tab, style="TFrame")
+        tree_frame.pack(expand=True, fill="both")
+        tree_frame.grid_rowconfigure(0, weight=1)
+        tree_frame.grid_columnconfigure(0, weight=1)
+
         columns = ('Name', 'Type', 'Value', 'Scope', 'Address', 'Line', 'Column')
         tree = ttk.Treeview(tree_frame, columns=columns, show="headings", style="Treeview")
         tree.grid(row=0, column=0, sticky="nsew")
 
-        # Configurar el ANCHO y TÍTULO de cada columna
-        tree.column("Name", anchor="w", width=80, minwidth=60)
-        tree.heading("Name", text="Variable", anchor="w")
-
-        tree.column("Type", anchor="w", width=60, minwidth=50)
-        tree.heading("Type", text="Tipo", anchor="w")
-
-        tree.column("Value", anchor="w", width=80, minwidth=60)
-        tree.heading("Value", text="Valor", anchor="w")
-
-        tree.column("Scope", anchor="w", width=80)
-        tree.heading("Scope", text="Ambito", anchor="w")
-
-        tree.column("Address", anchor="center", width=80)
-        tree.heading("Address", text="Dirección", anchor="center")
-
-        tree.column("Line", anchor="center", width=50, minwidth=40)
-        tree.heading("Line", text="Línea", anchor="center")
-
-        tree.column("Column", anchor="center", width=50, minwidth=40)
-        tree.heading("Column", text="Columna", anchor="center")
-
-        # Añadir un scrollbar vertical importante si hay muchas variables
+        # (Tu código para configurar las columnas va aquí, no necesita cambios)
+        tree.column("Name", anchor="w", width=80); tree.heading("Name", text="Variable", anchor="w")
+        tree.column("Type", anchor="w", width=60); tree.heading("Type", text="Tipo", anchor="w")
+        tree.column("Value", anchor="w", width=80); tree.heading("Value", text="Valor", anchor="w")
+        tree.column("Scope", anchor="w", width=80); tree.heading("Scope", text="Ambito", anchor="w")
+        tree.column("Address", anchor="center", width=80); tree.heading("Address", text="Dirección", anchor="center")
+        tree.column("Line", anchor="center", width=50); tree.heading("Line", text="Línea", anchor="center")
+        tree.column("Column", anchor="center", width=50); tree.heading("Column", text="Columna", anchor="center")
+        
         scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
         scrollbar.grid(row=0, column=1, sticky="ns")
         tree.configure(yscrollcommand=scrollbar.set)
 
-        # Llenar la tabla con los datos, incluyendo el nombre y valor
-        for name, data in symbol_table.symbols.items():
-            # Muestra 'undefined' si el valor es None para mayor claridad
-            value_to_display = data.get('value')
-            if value_to_display is None:
-                value_to_display = 'undefined'
+        all_symbols = symbol_table.get_historical_symbols()
+        for address, data in all_symbols.items():
+            name = data['name']
+            value_to_display = data.get('value', 'undefined')
+            if value_to_display is None: value_to_display = 'undefined'
             
             tree.insert("", "end", values=(
-                name,
-                data['type'],
-                value_to_display,
-                data['scope'],
-                data['memory_address'],
-                data['line'],
-                data['column']
+                name, data['type'], value_to_display, data['scope'], 
+                data['memory_address'], data['line'], data['column']
             ))
 
     def generate_intermediate_code(self):
