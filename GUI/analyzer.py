@@ -127,8 +127,10 @@ class Parser:
                 last_token = self.tokens[-1] if self.tokens else (None, None, None, 1, 1)
                 self.errors.append(f"Syntax error: unexpected end of input, expected {expected_type} at line {last_token[3]}")
             return None
+    
     def parse(self):
         return self.program()
+    
     def program(self):
         main_token = self.current_token()
         if not (self.match('keyword', 'int') and self.match('keyword', 'main') and self.match('symbol', '(') and self.match('symbol', ')')):
@@ -141,11 +143,12 @@ class Parser:
         if not self.match('symbol', '}'):
             self.errors.append("Syntax Error: Expected '}' at the end of the program.")
         return ASTNode('Program', children=[stmts], line=main_token[3] if main_token else None, column=main_token[4] if main_token else None)
+    
     def statement_list(self):
         children = []
         initial_token = self.current_token()
         line, column = (initial_token[3], initial_token[4]) if initial_token else (None, None)
-        while self.current_token() and self.current_token()[1] not in ('}', 'end', 'else', 'until'):
+        while self.current_token() and self.current_token()[1] not in ('}', 'end', 'else', 'until','case'):
             stmt = self.statement()
             if stmt and stmt.type != 'Error':
                 children.append(stmt)
@@ -154,6 +157,7 @@ class Parser:
             else:
                 break
         return ASTNode('StatementList', children=children, line=line, column=column)
+    
     def statement(self):
         token = self.current_token()
         if not token: return None
@@ -167,6 +171,10 @@ class Parser:
             return self.iteration()
         elif token[1] == 'do':
             return self.repetition()
+        elif token[1] == 'for':
+            return self.for_loop()
+        elif token[1] == 'switch':
+            return self.switch_statement()
         elif token[1] == 'cin':
             return self.input_statement()
         elif token[1] == 'cout':
@@ -177,6 +185,7 @@ class Parser:
             self.errors.append(f"Unknown statement starting with '{token[1]}' at line {token[3]}, column {token[4]}")
             self.pos += 1 
             return ASTNode('Error', line=token[3], column=token[4])
+    
     def variable_declaration(self):
         type_token = self.match('keyword')
         if not type_token: return None
@@ -185,6 +194,7 @@ class Parser:
         if not self.match('symbol', ';'):
             return ASTNode('Error')
         return ASTNode('VariableDeclaration', children=[type_node] + initializers, line=type_token[3], column=type_token[4])
+    
     def initializer_list(self):
         initializers = [self.initializer()]
         while self.current_token() and self.current_token()[1] == ',':
@@ -196,6 +206,7 @@ class Parser:
                 self.errors.append("Syntax Error: Expected identifier after ','.")
                 return [ASTNode('Error')]
         return initializers
+    
     def initializer(self):
         id_token = self.match('identifier')
         if not id_token: return None
@@ -207,6 +218,7 @@ class Parser:
                 return ASTNode('Error')
             return ASTNode('Assignment', children=[identifier_node, expr_node], line=id_token[3], column=id_token[4])
         return identifier_node
+    
     def selection(self):
         if_token = self.match('keyword', 'if')
         if not if_token: return ASTNode('Error')
@@ -223,6 +235,7 @@ class Parser:
         if else_block:
             children.append(ASTNode('ElseBlock', children=else_block.children, line=else_block.line))
         return ASTNode('IfStatement', children=children, line=if_token[3], column=if_token[4])
+    
     def iteration(self):
         while_token = self.match('keyword', 'while')
         if not while_token: return ASTNode('Error')
@@ -232,6 +245,7 @@ class Parser:
         body = self.statement_list()
         if not self.match('keyword', 'end'): return ASTNode('Error')
         return ASTNode('WhileLoop', children=[condition, body], line=while_token[3], column=while_token[4])
+    
     def repetition(self):
         do_token = self.match('keyword', 'do')
         if not do_token: return ASTNode('Error')
@@ -242,10 +256,12 @@ class Parser:
         if self.current_token() and self.current_token()[1] == ';':
             self.match('symbol', ';')
         return ASTNode('DoUntilLoop', children=[body, condition], line=do_token[3], column=do_token[4])
+    
     def lookahead_inc_dec(self):
         token = self.current_token()
         next_token = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
         return token and token[0] == 'identifier' and next_token and next_token[0] == 'inc_dec_op'
+    
     def inc_dec_statement(self):
         id_token = self.match('identifier')
         op_token = self.match('inc_dec_op')
@@ -256,18 +272,73 @@ class Parser:
         one_node = ASTNode('Number', value='1', line=op_token[3], column=op_token[4])
         expr = ASTNode('AddExpression', value=op_symbol, children=[id_node, one_node])
         return ASTNode('Assignment', children=[id_node, expr], line=id_token[3], column=id_token[4])
+    
     def assignment(self):
         id_token = self.match('identifier')
         if not (id_token and self.match('assignment')): return ASTNode('Error')
         expr = self.logical_expression()
         if not (expr and self.match('symbol', ';')): return ASTNode('Error')
         return ASTNode('Assignment', children=[ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4]), expr], line=id_token[3], column=id_token[4])
+    
+    def for_loop(self):
+        for_token = self.match('keyword', 'for')
+        if not for_token: return ASTNode('Error')
+        if not self.match('symbol', '('): return ASTNode('Error')
+        
+        # El inicializador puede ser una declaración o una asignación simple
+        init = self.variable_declaration() if self.current_token()[1] in DATA_TYPES else self.assignment()
+        # Se elimina el punto y coma de la asignación para que encaje aquí
+        if init.type == 'Assignment': self.match('symbol', ';')
+
+        condition = self.logical_expression()
+        if not self.match('symbol', ';'): return ASTNode('Error')
+        
+        increment = self.assignment()
+        if not self.match('symbol', ')'): return ASTNode('Error')
+        if not self.match('keyword', 'then'): return ASTNode('Error')
+        
+        body = self.statement_list()
+        
+        if not self.match('keyword', 'end'): return ASTNode('Error')
+        
+        return ASTNode('ForLoop', children=[init, condition, increment, body], line=for_token[3], column=for_token[4])
+    
+    def switch_statement(self):
+        switch_token = self.match('keyword', 'switch')
+        if not self.match('symbol', '('): return ASTNode('Error')
+        expr = self.logical_expression()
+        if not self.match('symbol', ')'): return ASTNode('Error')
+
+        cases = []
+        while self.current_token() and self.current_token()[1] == 'case':
+            case_node = self.case_clause()
+            if case_node:
+                cases.append(case_node)
+
+        if not self.match('keyword', 'end'): return ASTNode('Error')
+        
+        return ASTNode('SwitchStatement', children=[expr] + cases, line=switch_token[3], column=switch_token[4])
+
+    def case_clause(self):
+        case_token = self.match('keyword', 'case')
+        if not case_token: return None
+        
+        value = self.component() # El valor del caso (un literal: número, string, etc.)
+        
+        if not self.match('keyword', 'then'): return ASTNode('Error')
+        
+        # El statement_list ahora se detendrá automáticamente antes del siguiente 'case' o 'end'
+        stmts = self.statement_list()
+        
+        return ASTNode('CaseClause', children=[value, stmts], line=case_token[3], column=case_token[4])
+
     def input_statement(self):
         cin_token = self.match('keyword', 'cin')
         if not (cin_token and self.match('shift_op', '>>')): return ASTNode('Error')
         id_token = self.match('identifier')
         if not (id_token and self.match('symbol', ';')): return ASTNode('Error')
         return ASTNode('Input', children=[ASTNode('Identifier', value=id_token[1], line=id_token[3], column=id_token[4])], line=cin_token[3], column=cin_token[4])
+    
     def output_statement(self):
         cout_token = self.match('keyword', 'cout')
         if not (cout_token and self.match('shift_op', '<<')): return ASTNode('Error')
@@ -282,6 +353,7 @@ class Parser:
                 break
         if not self.match('symbol', ';'): return ASTNode('Error')
         return ASTNode('Output', children=children, line=cout_token[3], column=cout_token[4])
+    
     def logical_expression(self):
         node = self.expression()
         while self.current_token() and self.current_token()[0] == 'logical_op':
@@ -289,6 +361,7 @@ class Parser:
             right = self.expression()
             node = ASTNode('LogicalExpression', value=op_token[1], children=[node, right], line=op_token[3], column=op_token[4])
         return node
+    
     def expression(self):
         left = self.simple_expression()
         if self.current_token() and self.current_token()[0] == 'relational_op':
@@ -296,6 +369,7 @@ class Parser:
             right = self.simple_expression()
             return ASTNode('RelationalExpression', value=op_token[1], children=[left, right], line=op_token[3], column=op_token[4])
         return left
+    
     def simple_expression(self):
         node = self.term()
         while self.current_token() and self.current_token()[0] == 'add_op':
@@ -303,6 +377,7 @@ class Parser:
             right = self.term()
             node = ASTNode('AddExpression', value=op_token[1], children=[node, right], line=op_token[3], column=op_token[4])
         return node
+    
     def term(self):
         node = self.factor()
         while self.current_token() and self.current_token()[0] == 'mul_op':
@@ -310,6 +385,7 @@ class Parser:
             right = self.factor()
             node = ASTNode('MulExpression', value=op_token[1], children=[node, right], line=op_token[3], column=op_token[4])
         return node
+    
     def factor(self):
         node = self.component()
         while self.current_token() and self.current_token()[0] == 'pow_op':
@@ -317,6 +393,7 @@ class Parser:
             right = self.component()
             node = ASTNode('PowExpression', value=op_token[1], children=[node, right], line=op_token[3], column=op_token[4])
         return node
+    
     def component(self):
         token = self.current_token()
         if not token: return ASTNode('Error')
@@ -405,29 +482,96 @@ class SemanticAnalyzer:
         self.symbol_table = SymbolTable()
         self.errors = []
         self.log = []
+    
     def analyze(self):
         if self.ast and self.ast.type != 'Error':
             self.visit(self.ast)
         return self.errors
+    
     def visit(self, node):
         if not node or node.type == 'Error':
             return 'error_type', None
         method_name = f'visit_{node.type}'
         visitor = getattr(self, method_name, self.generic_visit)
-        return visitor(node)
+        inferred_type, evaluated_value = visitor(node)
+        node.inferred_type = inferred_type
+        node.evaluated_value = evaluated_value
+        return inferred_type, evaluated_value
+    
     def generic_visit(self, node):
         for child in node.children:
             self.visit(child)
+        return None, None
+    
     def add_error(self, message, line, column):
         self.errors.append(f"Semantic Error: {message} (Line: {line}, Column: {column})")
+    
     def visit_Program(self, node):
         self.generic_visit(node)
+        return None, None
+    
     def visit_StatementList(self, node):
         self.generic_visit(node)
+        return None, None
+    
+    def visit_ForLoop(self, node):
+        init, condition, increment, body = node.children
+        self.log.append("\nRegla: Analizando bucle FOR.")
+        self.symbol_table.enter_scope('for')
+        self.log.append("Acción: Entrando en ámbito 'for'.")
+        
+        self.visit(init)
+        
+        cond_type, _ = self.visit(condition)
+        self.log.append(f" -> Condición evaluada a tipo: '{cond_type}'.")
+        if cond_type != 'bool' and cond_type != 'error_type':
+            self.add_error(f"For loop condition must be boolean, but got '{cond_type}'.", condition.line, condition.column)
+            
+        self.visit(body)
+        self.visit(increment)
+        
+        self.symbol_table.exit_scope()
+        self.log.append("Acción: Saliendo de ámbito 'for'.")
+        return None, None # Las sentencias no devuelven tipo
+
+    def visit_SwitchStatement(self, node):
+        expr_node = node.children[0]
+        case_clauses = node.children[1:]
+        
+        self.log.append("\nRegla: Analizando sentencia SWITCH.")
+        expr_type, _ = self.visit(expr_node)
+        
+        if expr_type not in ('int', 'char', 'string') and expr_type != 'error_type':
+            self.add_error(f"Switch expression must be an integer, char, or string, but got '{expr_type}'.", expr_node.line, expr_node.column)
+
+        for case in case_clauses:
+            self.visit(case)
+            case_val_type = case.children[0].inferred_type
+            if case_val_type != expr_type and case_val_type != 'error_type':
+                self.add_error(f"Case value type '{case_val_type}' does not match switch expression type '{expr_type}'.", case.line, case.column)
+        return None, None
+    
+    def visit_CaseClause(self, node):
+        self.symbol_table.enter_scope('case')
+        self.log.append("Acción: Entrando en ámbito 'case'.")
+        self.visit(node.children[0]) # Visitar el valor del caso
+        self.visit(node.children[1]) # Visitar el bloque de sentencias
+        self.symbol_table.exit_scope()
+        self.log.append("Acción: Saliendo de ámbito 'case'.")
+        return None, None
+
+    def visit_Break(self, node):
+        # Aquí podrías verificar si el break está dentro de un ciclo o switch
+        return None, None
+    
     def visit_ThenBlock(self, node):
         self.generic_visit(node)
+        return None, None
+    
     def visit_ElseBlock(self, node):
         self.generic_visit(node)
+        return None, None
+    
     def visit_IfStatement(self, node):
         condition_node, then_block = node.children[0], node.children[1]
         self.log.append("\nRegla: Analizando sentencia IF.")
@@ -447,6 +591,8 @@ class SemanticAnalyzer:
             self.visit(else_block)
             self.symbol_table.exit_scope()
             self.log.append("Acción: Saliendo de ámbito 'else'.")
+        return None, None
+    
     def visit_WhileLoop(self, node):
         condition_node, body_block = node.children[0], node.children[1]
         self.log.append("\nRegla: Analizando bucle WHILE.")
@@ -459,6 +605,8 @@ class SemanticAnalyzer:
         self.visit(body_block)
         self.symbol_table.exit_scope()
         self.log.append("Acción: Saliendo de ámbito 'while'.")
+        return None, None
+    
     def visit_DoUntilLoop(self, node):
         body_block, condition_node = node.children[0], node.children[1]
         self.log.append("\nRegla: Analizando bucle DO-UNTIL.")
@@ -471,6 +619,8 @@ class SemanticAnalyzer:
         self.log.append(f" -> Condición evaluada a tipo: '{condition_type}'.")
         if condition_type != 'bool' and condition_type != 'error_type':
             self.add_error(f"Do-until loop condition must be boolean, but got '{condition_type}'.", condition_node.line, condition_node.column)
+        return None, None
+
     def visit_VariableDeclaration(self, node):
         var_type = node.children[0].value
         for initializer_node in node.children[1:]:
@@ -496,6 +646,8 @@ class SemanticAnalyzer:
                     self.add_error(f"Variable '{var_name}' already declared in this scope.", initializer_node.line, initializer_node.column)
                 else:
                     self.log.append(f"Acción: Símbolo '{var_name}' añadido a la tabla en ámbito '{self.symbol_table.get_current_scope_name()}'.")
+        return None, None
+
     def visit_Assignment(self, node):
         var_name = node.children[0].value
         self.log.append(f"\nRegla: Analizando asignación para '{var_name}'.")
@@ -514,14 +666,19 @@ class SemanticAnalyzer:
             self.symbol_table.update_value(var_name, expr_value)
             self.log.append(f" -> Resultado: Tipos compatibles. Valor actualizado.")
         return expected_type, expr_value
+    
     def visit_Input(self, node):
         var_name = node.children[0].value
         if not self.symbol_table.lookup(var_name):
             self.add_error(f"Variable '{var_name}' for input is not declared.", node.children[0].line, node.children[0].column)
         else:
             self.symbol_table.update_value(var_name, '<input>')
+        return None, None
+    
     def visit_Output(self, node):
         self.generic_visit(node)
+        return None, None
+    
     def visit_LogicalExpression(self, node):
         left_type, _ = self.visit(node.children[0])
         right_type, _ = self.visit(node.children[1])
@@ -530,6 +687,7 @@ class SemanticAnalyzer:
         if left_type != 'error_type' and right_type != 'error_type':
             self.add_error(f"Unsupported operand types for '{node.value}': '{left_type}' and '{right_type}'. Both must be boolean.", node.line, node.column)
         return 'error_type', None
+    
     def visit_RelationalExpression(self, node):
         left_type, _ = self.visit(node.children[0])
         right_type, _ = self.visit(node.children[1])
@@ -538,6 +696,7 @@ class SemanticAnalyzer:
                 self.add_error(f"Unsupported operand types for '{node.value}': '{left_type}' and '{right_type}'. Both must be numeric.", node.line, node.column)
              return 'error_type', None
         return 'bool', None
+    
     def visit_AddExpression(self, node):
         left_type, left_val = self.visit(node.children[0])
         right_type, right_val = self.visit(node.children[1])
@@ -554,6 +713,7 @@ class SemanticAnalyzer:
         if 'error_type' not in (left_type, right_type):
             self.add_error(f"Unsupported operand types for '{node.value}': '{left_type}' and '{right_type}'.", node.line, node.column)
         return 'error_type', None
+    
     def visit_MulExpression(self, node):
         left_type, left_val = self.visit(node.children[0])
         right_type, right_val = self.visit(node.children[1])
@@ -573,6 +733,7 @@ class SemanticAnalyzer:
                     return 'error_type', None
         if op == '/': return 'float', new_val
         return 'float' if 'float' in (left_type, right_type) else 'int', new_val
+    
     def visit_PowExpression(self, node):
         left_type, left_val = self.visit(node.children[0])
         right_type, right_val = self.visit(node.children[1])
@@ -584,12 +745,14 @@ class SemanticAnalyzer:
         if left_type != 'error_type' and right_type != 'error_type':
             self.add_error(f"Unsupported operand types for '^': '{left_type}' and '{right_type}'.", node.line, node.column)
         return 'error_type', None
+    
     def visit_Identifier(self, node):
         symbol = self.symbol_table.lookup(node.value)
         if not symbol:
             self.add_error(f"Variable '{node.value}' used before declaration.", node.line, node.column)
             return 'error_type', None
-        return symbol['type'], symbol['value']
+        node.evaluated_value = symbol.get('value')
+        return symbol['type'], symbol.get('value')
     def visit_Number(self, node):
         val = eval(node.value)
         return 'float' if isinstance(val, float) else 'int', val

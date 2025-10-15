@@ -440,15 +440,18 @@ class Compiler_GUI:
                 output_error_semantic.insert(tk.END, "No semantic errors found.\n", "success")
                 output_error_semantic.tag_config("success", foreground="green")
 
+            # --- CAMBIO PRINCIPAL: Mostrar el AST anotado en lugar de la tabla de símbolos ---
+            self.display_annotated_ast(self.last_ast)
+            
+            # La tabla de símbolos ahora solo se muestra en la pestaña HASH
             self.display_symbol_table(analyzer.symbol_table)
-            self.display_semantic_tree(analyzer.symbol_table) 
         else:
             output_error_semantic.insert(tk.END, "Cannot perform semantic analysis due to syntax errors or no AST.")
 
         output_error_semantic.config(state=tk.DISABLED)
 
-    def display_semantic_tree(self, symbol_table):
-        """Muestra la información semántica de los símbolos como un árbol en la pestaña 'Semantic'."""
+    def display_annotated_ast(self, ast_root):
+        """Muestra el AST en un Treeview, enriquecido con datos semánticos."""
         for widget in self.semantic_tab.winfo_children():
             widget.destroy()
 
@@ -459,30 +462,45 @@ class Compiler_GUI:
 
         tree = ttk.Treeview(tree_frame, show="tree", style="Treeview")
         tree.grid(row=0, column=0, sticky="nsew")
-        
-        tree_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
-        tree_scrollbar.grid(row=0, column=1, sticky="ns")
-        tree.configure(yscrollcommand=tree_scrollbar.set)
-        
-        # --- CAMBIO CLAVE: Usar la nueva función ---
-        all_symbols = symbol_table.get_historical_symbols()
 
-        if not all_symbols:
-            tree.insert("", "end", text="No symbols defined.", open=True)
+        tree_scrollbar_y = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
+        tree_scrollbar_y.grid(row=0, column=1, sticky="ns")
+        tree.configure(yscrollcommand=tree_scrollbar_y.set)
+
+        tree_scrollbar_x = ttk.Scrollbar(tree_frame, orient="horizontal", command=tree.xview, style="Horizontal.TScrollbar")
+        tree_scrollbar_x.grid(row=1, column=0, sticky="ew")
+        tree.configure(xscrollcommand=tree_scrollbar_x.set)
+        
+        if ast_root:
+            self.build_annotated_treeview(tree, "", ast_root)
+        else:
+            tree.insert("", "end", text="No AST available for semantic display.")
+    
+    def build_annotated_treeview(self, treeview, parent_item, node):
+        """Construye recursivamente el Treeview a partir del AST anotado."""
+        if node is None:
             return
 
-        for address, data in all_symbols.items():
-            name = data["name"] # Obtenemos el nombre desde los datos
-            parent_node = tree.insert("", "end", text=f'"{name}" (Línea: {data["line"]})', open=True)
-            
-            tree.insert(parent_node, "end", text=f"Tipo: {data['type']}")
-            tree.insert(parent_node, "end", text=f"Ámbito: {data['scope']}")
-            tree.insert(parent_node, "end", text=f"Dirección de Memoria: {data['memory_address']}")
-            
-            value_to_display = data.get('value', 'undefined')
-            if value_to_display is None:
-                value_to_display = 'undefined'
-            tree.insert(parent_node, "end", text=f"Valor: {value_to_display}")
+        # Construir el texto del nodo
+        base_text = str(node)
+        annotations = []
+        if hasattr(node, 'inferred_type') and node.inferred_type:
+            annotations.append(f"Tipo: {node.inferred_type}")
+        if hasattr(node, 'evaluated_value') and node.evaluated_value is not None:
+            # Para strings, mostrarlo entre comillas
+            val_str = f'"{node.evaluated_value}"' if isinstance(node.evaluated_value, str) else str(node.evaluated_value)
+            annotations.append(f"Valor: {val_str}")
+        
+        if annotations:
+            node_text = f"{base_text}  [{', '.join(annotations)}]"
+        else:
+            node_text = base_text
+
+        item_id = treeview.insert(parent_item, "end", text=node_text, open=True)
+
+        if hasattr(node, 'children') and isinstance(node.children, list):
+            for child in node.children:
+                self.build_annotated_treeview(treeview, item_id, child)
 
     def display_symbol_table(self, symbol_table):
         """Crea un Treeview mejorado para mostrar la tabla de símbolos en la pestaña HASH."""
