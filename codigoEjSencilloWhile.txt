@@ -1,0 +1,19 @@
+int main() {
+    int a = 0;
+    cout << "Escribe un numero: ";
+    cin >> a;
+    
+    if (a > 10) then
+        cout << "Tu numero es mayor que 10.";
+    else
+        cout << "Tu numero es 10 o menos.";
+    end
+    
+    int i = 0;
+    while (i < a) then
+        cout << "je";
+        i = i + 1;
+    end
+    
+    cout << "Conteo finalizado.";
+}

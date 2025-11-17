@@ -1,6 +1,9 @@
-import tkinter as tk, os, sys
+import tkinter as tk, os, sys, traceback
 from tkinter import messagebox, ttk, filedialog
 from analyzer import lexical_analyzer, Parser, SemanticAnalyzer 
+import llvmlite.binding as llvm
+from codegen import CodeGenerator
+import ctypes, ctypes.util
 
 class Compiler_GUI:
     def __init__(self, root):
@@ -541,12 +544,78 @@ class Compiler_GUI:
             ))
 
     def generate_intermediate_code(self):
-        # Generar código intermedio
-        print("Código intermedio generado")
+        """Genera el LLVM IR"""
+        
+        # Limpiar pestaña de código intermedio
+        output_ir = self.create_output_area(self.inter_code_tab)
+        output_ir.config(state=tk.NORMAL)
+        output_ir.delete(1.0, tk.END)
 
+        if self.last_ast and not self.syntax_errors:
+            try:
+                generator = CodeGenerator()
+                
+                llvm_ir = generator.generate(self.last_ast)
+                
+                output_ir.insert(tk.END, llvm_ir)
+                
+                self.compiled_module = generator.module
+
+            except Exception as e:
+                output_ir.insert(tk.END, f"Error during code generation:\n{e}\n")
+                output_ir.insert(tk.END, traceback.format_exc()) # Imprime el error completo
+        else:
+            output_ir.insert(tk.END, "No se puede generar código: \nPrimero debe pasar el análisis semántico sin errores.")
+        
+        output_ir.config(state=tk.DISABLED)
+        
     def execute(self):
-        # Ejecutar el código
-        print("Ejecución completada")
+        """Ejecuta el código LLVM IR compilado usando JIT."""
+
+        output_results = self.create_output_area(self.results_tab)
+        output_results.config(state=tk.NORMAL)
+        output_results.delete(1.0, tk.END)
+
+        if not hasattr(self, 'compiled_module'):
+            output_results.insert(tk.END, "Error: Debe generar el código intermedio primero.")
+            output_results.config(state=tk.DISABLED)
+            return
+
+        try:
+            output_results.insert(tk.END, "Ejecutando código compilado...\n\n")
+
+            if sys.platform == 'win32':
+                lib_name = ctypes.util.find_library('msvcrt')
+            else:
+                lib_name = ctypes.util.find_library('c')
+
+            if not lib_name:
+                raise RuntimeError("No se pudo encontrar la librería C (msvcrt / libc).")
+
+            llvm.load_library_permanently(lib_name)
+
+            llvm_module = llvm.parse_assembly(str(self.compiled_module))
+            llvm_module.verify()
+
+            target_machine = llvm.Target.from_default_triple().create_target_machine()
+            execution_engine = llvm.create_mcjit_compiler(llvm_module, target_machine)
+
+            execution_engine.finalize_object()
+
+            main_func_ptr = execution_engine.get_function_address("main")
+
+            cfunc = ctypes.CFUNCTYPE(ctypes.c_int)(main_func_ptr)
+
+            return_code = cfunc()
+
+            output_results.insert(tk.END, f"\n... Ejecución finalizada.\n")
+            output_results.insert(tk.END, f"Proceso 'main' terminó con código: {return_code}\n")
+
+        except Exception as e:
+            output_results.insert(tk.END, f"Error durante la ejecución JIT:\n{e}\n")
+            output_results.insert(tk.END, traceback.format_exc())
+
+        output_results.config(state=tk.DISABLED)
 
     def new_file(self):
         self.code_text_area.delete(1.0, tk.END)  # Limpiar el área de texto
