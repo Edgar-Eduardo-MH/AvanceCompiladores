@@ -1,3 +1,5 @@
+EJEMPLO WHILE
+
 int main() {
     int a = 0;
     cout << "Escribe un numero: ";
@@ -16,4 +18,69 @@ int main() {
     end
     
     cout << "Conteo finalizado.";
+}
+
+EJEMPLO SWITCH
+
+int main() {
+    int x = 1;
+    
+    cout << "Iniciando Do-Until...";
+    
+    do
+        cout << x;
+        switch (x)
+            case 1 then
+                cout << " (uno)";
+            case 2 then
+                cout << " (dos)";
+            case 3 then
+                cout << " (tres)";
+        end
+        x = x + 1;
+    until (x > 3);
+    
+    cout << "Fin.";
+}
+
+EJEMPLO FOR
+
+int main() {
+    cout << "Iniciando bucle for:";
+    
+    for (int i = 0; i < 5; i = i + 1;) then
+        cout << "Iteracion: ";
+        cout << i;
+    end
+    
+    cout << "Bucle for finalizado.";
+}
+
+EJEMPLO FLOAT*INT = FLOAT
+
+int main() {
+    float a = 10.5;
+    int b = 2;
+    
+    float c = a * b; 
+    
+    cout << "El resultado es: ";
+    cout << c;
+    
+    if (c > 20.0) then
+        cout << "Es mayor que 20.0";
+    end
+}
+
+PRUEBA
+int main() {
+    int a = 0;
+    cout << "Escribe un numero: ";
+    cin >> a;
+    
+    if (a > 10 && a < 20) then
+        cout << "Tu numero esta entre 10 y 20.";
+    else
+        cout << "Tu numero NO esta entre 10 y 20.";
+    end
 }

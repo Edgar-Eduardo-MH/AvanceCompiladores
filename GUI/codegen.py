@@ -252,8 +252,7 @@ class CodeGenerator:
         switch_val = self.visit(expr_node)
         
         end_bb = self.main_func.append_basic_block('switch_end')
-        
-        switch_inst = self.builder.switch(switch_val, end_bb, len(case_clauses))
+        switch_inst = self.builder.switch(switch_val, end_bb)
         
         for case_node in case_clauses:
             case_val_node = case_node.children[0]
@@ -280,16 +279,25 @@ class CodeGenerator:
         
         for child in node.children:
             value = self.visit(child)
+
+            args_for_call = []
             
             if isinstance(value.type, ir.FloatType):
                 format_str = "%f\n"
+                value_promoted = self.builder.fpext(value, ir.DoubleType(), 'fpext_tmp')
+                args_for_call = [value_promoted]
             elif isinstance(value.type, ir.IntType) and value.type.width == 32:
                 format_str = "%d\n"
+                args_for_call = [value]
+            elif isinstance(value.type, ir.IntType) and value.type.width == 1:
+                format_str = "%d\n" 
+                args_for_call = [value]
             else: 
                 format_str = "%s\n"
+                args_for_call = [value]
                 
             format_str_ptr = self._get_string_constant(format_str)
-            self.builder.call(printf, [format_str_ptr, value])
+            self.builder.call(printf, [format_str_ptr] + args_for_call)
 
             self.builder.call(fflush, [null_ptr])
 
@@ -402,3 +410,50 @@ class CodeGenerator:
         else:
             # icmp = integer comparison
             return self.builder.icmp_signed(node.value, left, right, 'icmptmp')
+        
+    def visit_LogicalExpression(self, node):
+        left_node = node.children[0]
+        right_node = node.children[1]
+        entry_block = self.builder.basic_block
+        
+        left_val = self.visit(left_node)
+
+        if node.value == '&&':
+            #Implementacion del &&
+            
+            rhs_bb = self.main_func.append_basic_block('and_rhs')
+            merge_bb = self.main_func.append_basic_block('and_merge')
+            self.builder.cbranch(left_val, rhs_bb, merge_bb)
+
+            self.builder.position_at_start(rhs_bb)
+            right_val = self.visit(right_node)
+            self.builder.branch(merge_bb) 
+            
+            rhs_end_block = self.builder.basic_block
+
+            self.builder.position_at_start(merge_bb)
+            phi = self.builder.phi(self.types['bool'], 'and_result')
+            phi.add_incoming(ir.Constant(self.types['bool'], False), entry_block)
+            phi.add_incoming(right_val, rhs_end_block)
+            
+            return phi 
+
+        elif node.value == '||':
+            #Implementacion de ||
+            
+            rhs_bb = self.main_func.append_basic_block('or_rhs')
+            merge_bb = self.main_func.append_basic_block('or_merge')
+            self.builder.cbranch(left_val, merge_bb, rhs_bb)
+
+            self.builder.position_at_start(rhs_bb)
+            right_val = self.visit(right_node) 
+            self.builder.branch(merge_bb)
+            
+            rhs_end_block = self.builder.basic_block
+
+            self.builder.position_at_start(merge_bb)
+            phi = self.builder.phi(self.types['bool'], 'or_result')
+            phi.add_incoming(ir.Constant(self.types['bool'], True), entry_block)
+            phi.add_incoming(right_val, rhs_end_block)
+            
+            return phi
