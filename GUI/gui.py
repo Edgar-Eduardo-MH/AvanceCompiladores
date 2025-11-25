@@ -2,6 +2,7 @@ import tkinter as tk, os, sys, traceback
 from tkinter import messagebox, ttk, filedialog
 from analyzer import lexical_analyzer, Parser, SemanticAnalyzer 
 import llvmlite.binding as llvm
+import subprocess
 from codegen import CodeGenerator
 import ctypes, ctypes.util
 
@@ -570,51 +571,80 @@ class Compiler_GUI:
         output_ir.config(state=tk.DISABLED)
         
     def execute(self):
-        """Ejecuta el código LLVM IR compilado usando JIT."""
+        """
+        Ejecuta el código LLVM IR compilado usando JIT.
+        IR -> Optimizar -> ASM -> OBJ -> EXE
+        """
 
         output_results = self.create_output_area(self.results_tab)
         output_results.config(state=tk.NORMAL)
         output_results.delete(1.0, tk.END)
 
-        if not hasattr(self, 'compiled_module'):
-            output_results.insert(tk.END, "Error: Debe generar el código intermedio primero.")
+        if not hasattr(self, 'compiled_module') or not self.last_ast:
+            output_results.insert(tk.END, "Error: Primero genera el código intermedio.")
             output_results.config(state=tk.DISABLED)
             return
 
         try:
-            output_results.insert(tk.END, "Ejecutando código compilado...\n\n")
+            output_results.insert(tk.END, "=== Iniciando Compilación ===\n")
+            
+            filename = "program"
+            
+            generator = CodeGenerator()
+            generator.generate(self.last_ast)
 
-            if sys.platform == 'win32':
-                lib_name = ctypes.util.find_library('msvcrt')
+            # .ll
+            with open(f"{filename}.ll", "w") as f:
+                f.write(str(generator.module))
+            output_results.insert(tk.END, f"Generado: {filename}.ll\n")
+
+            asm_code, obj_code = generator.optimize_and_compile()
+            
+            # .s
+            with open(f"{filename}.s", "w") as f:
+                f.write(asm_code)
+            output_results.insert(tk.END, f"Optimizado y Generado Ensamblador: {filename}.s\n")
+
+            # .o
+            with open(f"{filename}.o", "wb") as f:
+                f.write(obj_code)
+            output_results.insert(tk.END, f"Generado Código Objeto: {filename}.o\n")
+
+            output_results.insert(tk.END, "Enlazando con Clang...\n")
+            
+            exe_name = f"{filename}.exe"
+            
+            link_command = ["gcc", f"{filename}.o", "-o", exe_name]
+            
+            result = subprocess.run(link_command, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise Exception(f"Error de enlazado (Clang):\n{result.stderr}")
+            
+            output_results.insert(tk.END, f"Ejecutable creado: {exe_name}\n")
+
+            output_results.insert(tk.END, "\n=== Ejecutando Programa ===\n")
+            if sys.platform == "win32":
+                os.system(f'start cmd /k "{exe_name} & pause & exit"')
             else:
-                lib_name = ctypes.util.find_library('c')
+                os.system(f'./{exe_name}')
+            
+            output_results.insert(tk.END, "Ejecución lanzada en terminal externa.\n")
 
-            if not lib_name:
-                raise RuntimeError("No se pudo encontrar la librería C (msvcrt / libc).")
+            # Borramos .ll, .s, .o
+            files_to_clean = [f"{filename}.ll", f"{filename}.s", f"{filename}.o"]
+            for f in files_to_clean:
+                if os.path.exists(f):
+                    os.remove(f)
+            
+            output_results.insert(tk.END, "\n[Info] Archivos temporales (.ll, .s, .o) eliminados.\n")
 
-            llvm.load_library_permanently(lib_name)
-
-            llvm_module = llvm.parse_assembly(str(self.compiled_module))
-            llvm_module.verify()
-
-            target_machine = llvm.Target.from_default_triple().create_target_machine()
-            execution_engine = llvm.create_mcjit_compiler(llvm_module, target_machine)
-
-            execution_engine.finalize_object()
-
-            main_func_ptr = execution_engine.get_function_address("main")
-
-            cfunc = ctypes.CFUNCTYPE(ctypes.c_int)(main_func_ptr)
-
-            return_code = cfunc()
-
-            output_results.insert(tk.END, f"\n... Ejecución finalizada.\n")
-            output_results.insert(tk.END, f"Proceso 'main' terminó con código: {return_code}\n")
-
+        except FileNotFoundError:
+            output_results.insert(tk.END, "\nERROR CRÍTICO: No se encontró 'gcc'. \nAsegúrate de tener MinGW o GCC instalado y en el PATH del sistema.\n")
         except Exception as e:
-            output_results.insert(tk.END, f"Error durante la ejecución JIT:\n{e}\n")
-            output_results.insert(tk.END, traceback.format_exc())
-
+            output_results.insert(tk.END, f"\nError: {e}\n")
+            traceback.print_exc()
+            
         output_results.config(state=tk.DISABLED)
 
     def new_file(self):

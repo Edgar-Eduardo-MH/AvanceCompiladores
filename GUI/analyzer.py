@@ -425,13 +425,17 @@ class SymbolTable:
         self.scope_stack = [{'__name__': 'global'}] 
         self.memory_address_counter = 0
         self.persistent_symbols = {}
+
     def enter_scope(self, name='block'):
         self.scope_stack.append({'__name__': name})
+
     def exit_scope(self):
         if len(self.scope_stack) > 1:
             self.scope_stack.pop()
+
     def get_current_scope_name(self):
         return self.scope_stack[-1]['__name__']
+        
     def define(self, name, symbol_type, line, column):
         current_scope = self.scope_stack[-1]
         if name in current_scope:

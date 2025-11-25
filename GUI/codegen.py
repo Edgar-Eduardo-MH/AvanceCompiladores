@@ -457,3 +457,21 @@ class CodeGenerator:
             phi.add_incoming(right_val, rhs_end_block)
             
             return phi
+        
+
+    def optimize_and_compile(self):
+        
+        llvm_mod = llvm.parse_assembly(str(self.module))
+        llvm_mod.verify()
+    
+        triple_name = "x86_64-pc-windows-gnu"
+        llvm_mod.triple = triple_name
+
+        target = llvm.Target.from_triple(triple_name)
+        target_machine = target.create_target_machine(codemodel="small")
+
+        asm_result = target_machine.emit_assembly(llvm_mod)
+
+        obj_result = target_machine.emit_object(llvm_mod)
+
+        return asm_result, obj_result
